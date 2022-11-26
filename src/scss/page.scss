@@ -1,0 +1,123 @@
+@import './variables.scss';
+
+.page {
+    display: grid;
+    height: 100%;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: 1fr auto;
+    position: relative;
+
+    > .page-main {
+        height: 100%;
+        overflow: auto;
+        scrollbar-color: $body-bg $firefox-scrollbar-color;
+        z-index: 0; // Because page-sidebar has it.
+    }
+
+    > .page-sidebar {
+        background-color: $body-bg;
+        height: 100%;
+        overflow: auto;
+        width: 100%;
+        z-index: 0; // Fixes disabled button over dropdown button e.g. in gallery.
+    }
+
+    @mixin page-main-landscape {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    @mixin page-main-portrait {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    @mixin page-sidebar-landscape {
+        border-left: 1px solid $same-color-as-hr;
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    @mixin page-sidebar-div-landscape {
+        display: flex;
+        min-height: 100%;
+        flex-direction: column;
+        justify-content: center;
+        overflow-x: hidden;
+
+        > .page-sidebar-icon {
+            margin: 0.125rem 0.25rem;
+        }
+    }
+
+    @mixin page-sidebar-portrait {
+        border-top: 1px solid $same-color-as-hr;
+        grid-column: 1;
+        grid-row: 2;
+        text-align: end;
+    }
+
+    @mixin page-sidebar-div-portrait {
+        display: inline-flex;
+        flex-direction: row;
+        justify-content: flex-start; // When using "flex-direction: row" only "justify-content: flex-start" show a correct scrollbar if necessary. Therefore the hack with "display: inline-flex;" and "text-align: end;".
+        overflow-y: hidden;
+
+        > .page-sidebar-icon {
+            margin: 0.25rem 0.125rem;
+        }
+    }
+
+    &.page-auto {
+        // Unfortunately, soft-keyboards on mobile devices break the "orientation: landscape" and "orientation: portrait" media queries
+        // because opening the soft-keyboard shortly switches from portrait to landscape and then back to portrait.
+        // see https://stackoverflow.com/questions/8883163/css-media-query-soft-keyboard-breaks-css-orientation-rules-alternative-solut
+        @media only screen and (max-width: 768px) and (min-aspect-ratio: 13/9), screen and (min-width: 768px) and (min-aspect-ratio: 7/9) {
+            > .page-main {
+                @include page-main-landscape;
+            }
+            > .page-sidebar {
+                @include page-sidebar-landscape;
+                > div {
+                    @include page-sidebar-div-landscape;
+                }
+            }
+        }
+
+        @media only screen and (max-width: 768px) and (max-aspect-ratio: 13/9), screen and (min-width: 768px) and (max-aspect-ratio: 7/9) {
+            > .page-main {
+                @include page-main-portrait;
+            }
+            > .page-sidebar {
+                @include page-sidebar-portrait;
+                > div {
+                    @include page-sidebar-div-portrait;
+                }
+            }
+        }
+    }
+
+    &.page-landscape {
+        > .page-main {
+            @include page-main-landscape;
+        }
+        > .page-sidebar {
+            @include page-sidebar-landscape;
+            > div {
+                @include page-sidebar-div-landscape;
+            }
+        }
+    }
+
+    &.page-portrait {
+        > .page-main {
+            @include page-main-portrait;
+        }
+        > .page-sidebar {
+            @include page-sidebar-portrait;
+            > div {
+                @include page-sidebar-div-portrait;
+            }
+        }
+    }
+}

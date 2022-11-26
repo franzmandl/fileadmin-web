@@ -1,0 +1,25 @@
+@import './scss/variables.scss';
+// Importing bootstrap's scss files did not work with sass@1.43.2, but worked with node-sass@7.0.1.
+@import '~bootstrap/scss/bootstrap.scss';
+@import '~@mdi/font/css/materialdesignicons.min.css';
+@import './scss/page.scss';
+@import './scss/util.scss';
+
+html,
+body,
+body > #root {
+    height: 100%;
+}
+
+:root {
+    tab-size: 2;
+}
+
+// Fix e.g. anchors like <a hidden>...</a> where the hidden attribute does not work out of the box.
+[hidden] {
+    display: none !important;
+}
+
+pre {
+    margin: 0;
+}

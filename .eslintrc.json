@@ -1,0 +1,42 @@
+{
+  "settings": {
+    "react": {
+      "version": "detect"
+    }
+  },
+  "env": {
+    "browser": true,
+    "es2021": true
+  },
+  "extends": [
+    "eslint:recommended",
+    "plugin:react/recommended",
+    "plugin:react-hooks/recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:react/jsx-runtime",
+    "prettier"
+  ],
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaFeatures": {
+      "jsx": true
+    },
+    "ecmaVersion": 12,
+    "sourceType": "module",
+    "project": ["./tsconfig.json"]
+  },
+  "plugins": ["react", "@typescript-eslint", "prettier"],
+  "rules": {
+    "prettier/prettier": ["warn"],
+    "@typescript-eslint/no-explicit-any": ["off"],
+    "no-param-reassign": ["error"],
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": ["../.*"]
+      }
+    ],
+    "@typescript-eslint/restrict-plus-operands": ["error"],
+    "@typescript-eslint/restrict-template-expressions": ["error"]
+  }
+}

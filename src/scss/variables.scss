@@ -1,0 +1,24 @@
+@import '~bootstrap/scss/_functions.scss';
+
+$body-bg: #1a1a1a;
+$body-color: #eee;
+$btn-close-color: $body-color;
+$form-check-input-bg: $body-color;
+$input-bg: #080808;
+$input-border-color: #6c757d; // Value of $secondary.
+$input-btn-padding-x: 0.65rem;
+$link-color: #66a7e7;
+$list-group-color: $body-color;
+$modal-content-bg: #212529; // Sampled from card.
+
+$list-group-bg: $modal-content-bg;
+
+@import '~bootstrap/scss/_variables.scss';
+
+$backdrop-bg: rgba(0, 0, 0, $modal-backdrop-opacity);
+$firefox-scrollbar-color: #8b8b8b;
+$mobile-breakpoint: map-get($grid-breakpoints, md);
+$outline-focus-color: #333;
+$same-color-as-hr: #3f3f3f; // Sampled from hr.
+$thumbnail-dimension: 100px;
+$toast-bg: #333;

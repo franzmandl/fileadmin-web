@@ -1,0 +1,53 @@
+@import '../../scss/variables.scss';
+
+.text-line {
+    font-family: monospace;
+
+    .text-line-grid {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        padding-bottom: 0.23rem;
+        white-space: pre-wrap;
+
+        .text-sign-container {
+            border-bottom: 1px solid black;
+            border-radius: 25%;
+            display: inline-block;
+            text-align: center;
+            width: 3ch;
+            height: 1.5em; // Because 1.5 line-height.
+        }
+
+        .text-line-column2 {
+            overflow-wrap: break-word;
+            word-break: break-word;
+            overflow: auto;
+
+            span:only-child:empty::after {
+                content: ' ';
+            }
+        }
+
+        .text-note {
+            color: #81ca2d; // Sampled from KDE's Kate.
+            background-color: #4d1f24; // Sampled from KDE's Kate.
+            font-weight: bold;
+        }
+
+        .text-range {
+            color: #297fb8; // Sampled from KDE's Kate.
+        }
+
+        .text-warn {
+            color: #ca9219; // Sampled from KDE's Kate.
+            background-color: #451e1a; // Sampled from KDE's Kate.
+            font-weight: bold;
+        }
+
+        img.text-original {
+            color: $danger; // Affects alt text.
+            max-height: 360px;
+            max-width: 360px;
+        }
+    }
+}

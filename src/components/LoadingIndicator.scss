@@ -1,0 +1,13 @@
+@import '../scss/variables.scss';
+
+.loading-indicator {
+    display: block;
+    position: relative;
+    background-color: $backdrop-bg;
+
+    .loading-indicator-spinner {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+    }
+}

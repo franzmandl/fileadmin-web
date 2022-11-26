@@ -1,0 +1,60 @@
+@import './scss/variables.scss';
+
+.app {
+    display: grid;
+    grid-template-rows: 1fr auto auto;
+    height: 100%;
+
+    > :first-child {
+        grid-column: 1;
+        grid-row: 1;
+        overflow: auto;
+    }
+
+    .app-modal-container,
+    .gallery,
+    .loading-indicator {
+        grid-column: 1;
+        grid-row: 1 / 3;
+    }
+
+    .audio-player {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .console-component {
+        grid-column: 1;
+        grid-row: 3;
+    }
+
+    .app-modal-container {
+        &:empty {
+            display: none;
+        }
+
+        > * {
+            height: 100%;
+
+            > :first-child {
+                height: 100%;
+
+                > .modal {
+                    position: absolute;
+                }
+
+                > .modal-backdrop {
+                    background-color: $backdrop-bg;
+                    position: absolute;
+                    height: 100%;
+                    width: 100%;
+                }
+            }
+        }
+    }
+
+    .app-toast {
+        background: $toast-bg;
+        color: $body-color;
+    }
+}

@@ -1,0 +1,11 @@
+@import '../scss/variables.scss';
+
+.console-component {
+    border-top: 1px solid $same-color-as-hr;
+    max-height: 30vh;
+
+    // "&.page.page-landscape" is necessary because the most matching selector dominates.
+    &.page.page-landscape > .page-sidebar > div {
+        justify-content: flex-end; // Only "flex-start" show a scrollbar if necessary.
+    }
+}
