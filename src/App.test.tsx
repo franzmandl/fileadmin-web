@@ -1,4 +1,4 @@
-import {getBasename} from 'common/Util';
+import {getName} from 'common/Util';
 import {mount, ReactWrapper} from 'enzyme';
 import {App} from './App';
 
@@ -23,11 +23,11 @@ describe('<App/>', () => {
         ).toEqual('\n');
     });
 
-    it('getBasename', async () => {
-        expect(getBasename('basename')).toEqual('basename');
-        expect(getBasename('/basename')).toEqual('basename');
-        expect(getBasename('/')).toEqual('');
-        expect(getBasename('path/basename')).toEqual('basename');
-        expect(getBasename('/path/basename')).toEqual('basename');
+    it('getname', async () => {
+        expect(getName('name')).toEqual('name');
+        expect(getName('/name')).toEqual('name');
+        expect(getName('/')).toEqual('');
+        expect(getName('path/name')).toEqual('name');
+        expect(getName('/path/name')).toEqual('name');
     });
 });

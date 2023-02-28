@@ -1,75 +1,102 @@
-import {getType, humanFileSize, Type} from 'common/Util';
-import {Ticket} from './Ticket';
+import {serverPath} from 'common/constants';
+import {getName, getParentPath, getType, humanFileSize, Type} from 'common/Util';
+import {Link} from './Link';
+import {Operation} from './Operation';
+import {Task} from './Task';
 
 export interface BaseInode {
-    readonly basename: string;
-    readonly canRead: boolean;
-    readonly canWrite: boolean;
-    readonly dirname: string;
     readonly error: string | null;
     readonly friendlyName: string | null;
     readonly isDirectory: boolean;
     readonly isFile: boolean;
     readonly isRoot: boolean;
+    readonly isRunLast: boolean;
     readonly isVirtual: boolean;
-    readonly lastModified: number;
-    readonly mimeType: string;
+    readonly lastModified: number | null;
+    readonly link: Link | null;
+    readonly localPath: string | null;
+    readonly mimeType: string | null;
+    readonly operation: Operation;
+    readonly parentOperation: Operation | null;
     readonly path: string;
-    readonly realDirname: string;
-    readonly size: number;
-    readonly target: string | null;
-    readonly ticket: Ticket | null;
+    readonly realPath: string;
+    readonly size: number | null;
+    readonly task: Task | null;
 }
 
 export interface Inode extends BaseInode {
+    readonly canAnyAdd: boolean;
+    readonly canAnyGet: boolean;
+    readonly name: string;
+    readonly orderName: string;
+    readonly parentLocalPath: string | null;
+    readonly parentPath: string;
+    readonly realParentPath: string;
     readonly type: ReadonlyArray<Type>;
 }
 
 export function createInode(inode: BaseInode): Inode {
+    const name = getName(inode.path);
     return {
         ...inode,
+        canAnyAdd: inode.operation.canDirectoryAdd || inode.operation.canFileSet,
+        canAnyGet: inode.operation.canDirectoryGet || inode.operation.canFileGet,
+        name,
+        orderName: inode.friendlyName ?? name,
+        parentLocalPath: inode.localPath !== null ? getParentPath(inode.localPath) : null,
+        parentPath: getParentPath(inode.path),
+        realParentPath: getParentPath(inode.realPath),
         type: getType(inode.mimeType),
     };
 }
 
 export function formatSize(inode: Inode): string {
-    if (inode.isFile) {
-        return humanFileSize(inode.size);
-    } else if (!inode.canRead) {
-        return '?';
+    if (inode.size !== null) {
+        return inode.isFile ? humanFileSize(inode.size) : String(inode.size);
     } else {
-        return String(inode.size);
+        return '?';
     }
 }
 
 export function isReadmeFile(inode: Inode): boolean {
-    return inode.isFile && /^readme\./i.test(inode.basename);
-}
-
-function isIntersectionDirectory(inode: Inode): boolean {
-    return inode.isDirectory && inode.basename === '&';
+    return inode.isFile && /^readme\./i.test(inode.name);
 }
 
 export function isSpecial(inode: Inode): boolean {
-    return isReadmeFile(inode) || isIntersectionDirectory(inode);
+    return isReadmeFile(inode);
+}
+
+export function getDownloadPath({operation}: Pick<Inode, 'operation'>, encodedPath: string): string {
+    return operation.canFileStream ? serverPath.authenticatedPath.fileStream(encodedPath) : serverPath.authenticatedPath.file(encodedPath);
 }
 
 export const emptyInode = createInode({
-    basename: '',
-    canRead: false,
-    canWrite: false,
-    dirname: '',
     error: null,
     friendlyName: null,
     isDirectory: false,
     isFile: false,
     isRoot: false,
+    isRunLast: false,
     isVirtual: false,
-    lastModified: 0,
-    mimeType: '',
+    lastModified: null,
+    link: null,
+    localPath: null,
+    mimeType: null,
+    operation: {
+        canDirectoryAdd: false,
+        canDirectoryGet: false,
+        canFileGet: false,
+        canFileSet: false,
+        canFileStream: false,
+        canInodeCopy: false,
+        canInodeDelete: false,
+        canInodeMove: false,
+        canInodeRename: false,
+        canInodeShare: false,
+    },
+    parentOperation: null,
     path: '',
-    realDirname: '',
-    size: 0,
-    target: null,
-    ticket: null,
+    realPath: '',
+    size: null,
+    task: null,
 });

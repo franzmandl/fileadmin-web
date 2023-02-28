@@ -1,6 +1,6 @@
 import {AxiosError} from 'axios';
 import {formatTimestamp, TimestampPrecision} from 'common/Util';
-import {ConsoleEntry, ConsoleEntryLevel} from 'components/ConsoleComponent';
+import {ConsoleEntry, ConsoleEntryLevel} from 'components/console/ConsoleComponent';
 import {Dispatch, ReactNode, useCallback, useMemo, useState} from 'react';
 import {DropdownItem} from 'reactstrap';
 
@@ -29,7 +29,7 @@ export function useConsoleStore(): {
             log(
                 ConsoleEntryLevel.error,
                 <div className='text-danger px-1'>
-                    {formatTimestamp(new Date(), TimestampPrecision.second)} ERROR: {content}
+                    {formatTimestamp(new Date(), TimestampPrecision.second, ':')} ERROR: {content}
                 </div>
             );
         },
@@ -37,10 +37,11 @@ export function useConsoleStore(): {
     );
     const logWarning = useCallback(
         (content: ReactNode) => {
+            setShowConsole(true);
             log(
                 ConsoleEntryLevel.warning,
                 <div className='text-warning px-1'>
-                    {formatTimestamp(new Date(), TimestampPrecision.second)} WARNING: {content}
+                    {formatTimestamp(new Date(), TimestampPrecision.second, ':')} WARNING: {content}
                 </div>
             );
         },

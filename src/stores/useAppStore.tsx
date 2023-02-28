@@ -1,38 +1,54 @@
-import {alwaysThrow, identity} from 'common/Util';
-import {ModalContent} from 'components/ModalComponent';
-import {ReactNode, useCallback, useMemo, useRef, useState} from 'react';
+import {alwaysThrow, arrayRemoveInPlace, getHashParams, identity, noop} from 'common/Util';
+import {ModalContent} from 'components/util/ModalComponent';
+import {Dispatch, ReactNode, SetStateAction, useCallback, useMemo, useRef, useState} from 'react';
 import {Button} from 'reactstrap';
 import toast from 'react-hot-toast';
 import {useAsyncCallback} from 'common/useAsyncCallback';
-import {KeyboardControl, SetKeyboardControl} from 'components/KeyboardControl';
+import {KeyboardControl, SetKeyboardControl} from 'components/keyboard-control/KeyboardControl';
 import {ImmutableRefObject, useDepsEffect} from 'common/ReactUtil';
-import {DropdownItemCheckbox} from 'components/DropdownItemCheckbox';
+import {DropdownItemCheckbox} from 'components/dropdown/DropdownItemCheckbox';
+import {AppParameter, useAppParameter} from './useAppParameter';
 
 export interface AppStore {
+    readonly appParameter: AppParameter;
     readonly confirm: (body: ReactNode, header?: ReactNode) => Promise<boolean>;
+    readonly currentParams: URLSearchParams;
+    readonly setCurrentParams: Dispatch<SetStateAction<URLSearchParams>>;
     readonly enterPreventClose: () => void;
     readonly exitPreventClose: () => void;
     readonly indicateLoading: <T>(promise: Promise<T>) => Promise<T>;
     readonly setKeyboardControl: SetKeyboardControl;
+    readonly keyDownListeners: {
+        readonly add: (listener: (ev: KeyboardEvent) => boolean) => void;
+        readonly remove: (listener: (ev: KeyboardEvent) => boolean) => void;
+    };
     readonly modalContainerRef: ImmutableRefObject<HTMLDivElement | null>;
     readonly preventClose: <T>(promise: Promise<T>) => Promise<T>;
     readonly spellCheckDropdownItem: ReactNode;
     readonly toast: (message: string | JSX.Element) => void;
 }
 
+const defaultHashParams = getHashParams();
+const emptyParams = new URLSearchParams();
+
 export function useAppStore(): {
     readonly appStore: AppStore;
     readonly isLoading: boolean;
     readonly keyboardControl: KeyboardControl | undefined;
     readonly modalContent: ModalContent | undefined;
-    readonly spellCheck: boolean;
 } {
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [keyboardControl, setKeyboardControl] = useState<KeyboardControl>();
     const modalContainerRef = useRef<HTMLDivElement>(null);
     const [modalContent, setModalContent] = useState<ModalContent>();
     const preventCloseCounterRef = useRef(0);
-    const [spellCheck, setSpellCheck] = useState<boolean>(true);
+    const [currentParams, setCurrentParams] = useState(defaultHashParams);
+    useDepsEffect(() => {
+        const listener = () => setCurrentParams(getHashParams());
+        window.addEventListener('hashchange', listener);
+        return () => window.removeEventListener('hashchange', listener);
+    }, []);
+    const appParameter = useAppParameter(emptyParams, currentParams, setCurrentParams);
 
     const enterPreventClose = useCallback(() => (preventCloseCounterRef.current += 1), []);
     const exitPreventClose = useCallback(() => (preventCloseCounterRef.current -= 1), []);
@@ -68,9 +84,24 @@ export function useAppStore(): {
         });
     }, []);
 
+    const keyDownListeners = useRef<((ev: KeyboardEvent) => boolean)[]>([]);
+    useDepsEffect(() => {
+        const listener = (ev: KeyboardEvent) => {
+            const listeners = keyDownListeners.current;
+            for (let index = listeners.length - 1; index >= 0; index--) {
+                if (listeners[index](ev)) {
+                    break;
+                }
+            }
+        };
+        window.addEventListener('keydown', listener);
+        return () => window.removeEventListener('keydown', listener);
+    }, []);
+
     return {
         appStore: useMemo<AppStore>(
             () => ({
+                appParameter,
                 confirm: (body, header) =>
                     new Promise((resolve) =>
                         setModalContent({
@@ -82,25 +113,30 @@ export function useAppStore(): {
                             onClosed: () => resolve(false),
                         })
                     ),
+                currentParams,
+                setCurrentParams,
                 enterPreventClose,
                 exitPreventClose,
                 indicateLoading,
                 setKeyboardControl,
+                keyDownListeners: {
+                    add: (listener: (ev: KeyboardEvent) => boolean) => noop(keyDownListeners.current.push(listener)),
+                    remove: (listener: (ev: KeyboardEvent) => boolean) => noop(arrayRemoveInPlace(keyDownListeners.current, listener)),
+                },
                 modalContainerRef,
                 preventClose,
                 spellCheckDropdownItem: (
-                    <DropdownItemCheckbox checked={spellCheck} setChecked={setSpellCheck}>
+                    <DropdownItemCheckbox checked={appParameter.values.spellCheck} setChecked={appParameter.setSpellCheck}>
                         Spell check
                     </DropdownItemCheckbox>
                 ),
                 toast,
             }),
-            [enterPreventClose, exitPreventClose, indicateLoading, preventClose, spellCheck]
+            [appParameter, currentParams, enterPreventClose, exitPreventClose, indicateLoading, preventClose]
         ),
         isLoading,
         keyboardControl,
         modalContent,
-        spellCheck,
     };
 }
 

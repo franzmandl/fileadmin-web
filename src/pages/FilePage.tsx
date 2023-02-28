@@ -1,18 +1,18 @@
 import {serverPath, constant} from 'common/constants';
 import {useDepsEffect} from 'common/ReactUtil';
 import {useDelayed} from 'common/useDelayed';
-import {encodePath, getBasename} from 'common/Util';
-import {MenuDropdown} from 'components/MenuDropdown';
-import React, {useCallback, useState} from 'react';
+import {encodePath, getName} from 'common/Util';
+import {MenuDropdown} from 'components/dropdown/MenuDropdown';
+import React, {useCallback, useMemo, useState} from 'react';
 import {Button} from 'reactstrap';
-import {EnhancedTextarea} from 'components/EnhancedTextarea';
+import {RichTextarea} from 'components/textarea/RichTextarea';
 import {FileContent} from 'model/FileContent';
 import {focusNothing} from 'common/ReactUtil';
 import {AppContext} from 'stores/AppContext';
-import {KeyboardControlComponent} from 'components/KeyboardControlComponent';
-import {KeyboardControl} from 'components/KeyboardControl';
-import {SaveState} from 'components/SaveState';
-import {createSaveIcon} from 'components/SaveIcon';
+import {KeyboardControlComponent} from 'components/keyboard-control/KeyboardControlComponent';
+import {KeyboardControl} from 'components/keyboard-control/KeyboardControl';
+import {SaveState} from 'components/file/SaveState';
+import {createSaveIcon} from 'components/file/SaveIcon';
 import {useAsyncCallback} from 'common/useAsyncCallback';
 import {Inode} from 'model/Inode';
 
@@ -25,18 +25,16 @@ export function FilePage({
     context,
     keyboardControl,
     path,
-    spellCheck,
 }: {
     readonly context: AppContext;
     readonly keyboardControl: KeyboardControl | undefined;
     readonly path: string;
-    readonly spellCheck: boolean;
 }): JSX.Element {
-    const {appStore, authenticationStore, consoleStore, inodeStore} = context;
+    const {appStore, authenticationStore, consoleStore, inodeStore, suggestionStore} = context;
     const [state, setState] = useState<State>({saved: SaveState.saved, content: {lastModified: 0, value: ''}});
 
     useDepsEffect(() => {
-        document.title = `Edit ${getBasename(path)}`;
+        document.title = `Edit ${getName(path)}`;
     }, [path]);
 
     const load = useAsyncCallback(
@@ -76,13 +74,15 @@ export function FilePage({
         }
     }, [state]);
 
+    const suggestionControl = useMemo(() => suggestionStore.createSuggestionControl(path), [path, suggestionStore]);
+
     return (
         <div className='page page-auto'>
             <div className='page-main overflow-hidden'>
                 <div className='sticky-top'>{createSaveIcon(state.saved)}</div>
-                <EnhancedTextarea
+                <RichTextarea
                     autoFocus
-                    className='h-100 w-100 font-monospace ps-2'
+                    className='h-100'
                     onCtrlSKeyDown={useCallback(
                         (ev: React.SyntheticEvent) => {
                             ev.preventDefault();
@@ -91,7 +91,9 @@ export function FilePage({
                         [saveNowIfUnsaved]
                     )}
                     setKeyboardControl={appStore.setKeyboardControl}
-                    spellCheck={spellCheck}
+                    spellCheck={appStore.appParameter.values.spellCheck}
+                    suggestionControl={suggestionControl}
+                    textareaClassName='h-100 w-100 font-monospace ps-2'
                     value={state.content.value}
                     setValue={useCallback(
                         (value) =>

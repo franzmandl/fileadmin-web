@@ -2,20 +2,15 @@ import {Comparator} from 'common/Comparator';
 import {ImmutableRefObject} from 'common/ReactUtil';
 import {Action} from 'components/Action';
 import {AppContext} from 'stores/AppContext';
+import {DirectoryPageParameter} from './useDirectoryPageParameter';
 
 export interface DirectoryPageContext {
-    readonly action: Action;
+    readonly actionChangeListeners: {
+        readonly add: (listener: (nextAction: Action, prevAction: Action) => void) => void;
+        readonly remove: (listener: (nextAction: Action, prevAction: Action) => void) => void;
+    };
     readonly appContext: AppContext;
     readonly comparator: Comparator;
-    readonly decentFile: boolean;
-    readonly decentReadmeFile: boolean;
+    readonly directoryPageParameter: DirectoryPageParameter;
     readonly dropdownContainerRef: ImmutableRefObject<HTMLDivElement | null>;
-    readonly showAvailable: boolean;
-    readonly showHidden: boolean;
-    readonly showLastModified: boolean;
-    readonly showMimeType: boolean;
-    readonly showSize: boolean;
-    readonly showThumbnail: boolean;
-    readonly showWaiting: boolean;
-    readonly today: string;
 }

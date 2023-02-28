@@ -1,74 +1,116 @@
-import {Comparator} from 'common/Comparator';
-import {useLatest, useDepsEffect} from 'common/ReactUtil';
-import {encodePath, formatTimestamp, getBasename, getCurrentPath, getParentPath, separator, TimestampPrecision} from 'common/Util';
+import {useLatest, useDepsEffect, stopPropagationAndFocusNothing, focusNothing} from 'common/ReactUtil';
+import {encodePath, getName, getParentPath, separator, noop, paramsToHash} from 'common/Util';
 import {Action, keyToAction} from 'components/Action';
-import {DirectoryComponent} from 'components/DirectoryComponent';
-import {ComparatorDropdown} from 'components/ComparatorDropdown';
+import {DirectoryComponent} from 'components/inode/DirectoryComponent';
+import {ComparatorDropdown} from 'components/inode/ComparatorDropdown';
 import React, {useCallback, useMemo, useRef, useState} from 'react';
 import {Button, DropdownItem, Input} from 'reactstrap';
 import useResizeObserver from '@react-hook/resize-observer';
-import {focusNothing} from 'common/ReactUtil';
-import {constant, clientPath} from 'common/constants';
-import {MenuDropdown} from 'components/MenuDropdown';
+import {MenuDropdown} from 'components/dropdown/MenuDropdown';
 import {AppContext} from 'stores/AppContext';
-import {KeyboardControl} from 'components/KeyboardControl';
-import {KeyboardControlComponent} from 'components/KeyboardControlComponent';
+import {KeyboardControl} from 'components/keyboard-control/KeyboardControl';
+import {KeyboardControlComponent} from 'components/keyboard-control/KeyboardControlComponent';
 import {DirectoryPageContext} from './DirectoryPageContext';
-import {DropdownItemCheckbox} from 'components/DropdownItemCheckbox';
+import {DropdownItemCheckbox} from 'components/dropdown/DropdownItemCheckbox';
 import {emptyInode, Inode} from 'model/Inode';
+import {SearchComponent} from 'components/inode/SearchComponent';
+import {useDirectoryPageParameter} from './useDirectoryPageParameter';
+import {Comparator} from 'common/Comparator';
+
+let linkElement: HTMLLinkElement | null = null;
+const umlauts = Object.freeze<Record<string, string>>({
+    ä: 'a',
+    ö: 'o',
+    ü: 'u',
+});
 
 export function DirectoryPage({
     context,
     keyboardControl,
-    spellCheck,
 }: {
     readonly context: AppContext;
     readonly keyboardControl: KeyboardControl | undefined;
-    readonly spellCheck: boolean;
 }): JSX.Element {
-    const {appStore, authenticationStore, consoleStore} = context;
-    const [action, setAction] = useState<Action>(constant.action);
-    const [comparator, setComparator] = useState<Comparator>(
-        () => new Comparator(constant.sortAlphabetical, constant.sortAscending, constant.sortFoldersFirst, constant.sortSpecialFirst)
+    const {appStore, authenticationStore, consoleStore, suggestionStore} = context;
+    const directoryPageParameter = useDirectoryPageParameter(
+        appStore.appParameter.encoded,
+        appStore.currentParams,
+        appStore.setCurrentParams
     );
-    const [decentDirectory, setDecentDirectory] = useState<boolean>(constant.decentDirectory);
-    const [decentFile, setDecentFile] = useState<boolean>(constant.decentFile);
-    const [decentReadmeFile, setDecentReadmeFile] = useState<boolean>(constant.decentReadmeFile);
+    const {
+        previousPath,
+        values: {
+            action,
+            decentDirectory,
+            decentFile,
+            decentReadmeFile,
+            decentRunLastFile,
+            path,
+            showHidden,
+            showLastModified,
+            showMimeType,
+            showNotRepeating,
+            showSize,
+            showThumbnail,
+            showUnavailable,
+            showWaiting,
+            sortAlphabetical,
+            sortAscending,
+            sortFoldersFirst,
+            sortPriority,
+            sortSpecialFirst,
+            today,
+        },
+        setAction,
+        setDecentDirectory,
+        setDecentFile,
+        setDecentReadmeFile,
+        setDecentRunLastFile,
+        setShowHidden,
+        setShowLastModified,
+        setShowMimeType,
+        setShowNotRepeating,
+        setShowSize,
+        setShowThumbnail,
+        setShowUnavailable,
+        setShowWaiting,
+        setSortAlphabeticalAndAscending,
+        setSortFoldersFirst,
+        setSortPriority,
+        setSortSpecialFirst,
+        setToday,
+    } = directoryPageParameter;
+    const comparator = useMemo(
+        () => new Comparator(sortAlphabetical, sortAscending, sortFoldersFirst, sortPriority, sortSpecialFirst),
+        [sortAlphabetical, sortAscending, sortFoldersFirst, sortPriority, sortSpecialFirst]
+    );
+    const [canSearch, setCanSearch] = useState<boolean>(false);
     const [inode, setInode] = useState<Inode>(emptyInode);
-    const [path, setPath] = useState<string>(getCurrentPath());
-    const [previousPath, setPreviousPath] = useState<string>();
-    const [showAvailable, setShowAvailable] = useState<boolean>(constant.showAvailable);
-    const [showHidden, setShowHidden] = useState<boolean>(constant.showHidden);
-    const [showLastModified, setShowLastModified] = useState<boolean>(constant.showLastModified);
-    const [showMimeType, setShowMimeType] = useState<boolean>(constant.showMimeType);
-    const [showSize, setShowSize] = useState<boolean>(constant.showSize);
-    const [showThumbnail, setShowThumbnail] = useState<boolean>(constant.showThumbnail);
-    const [showWaiting, setShowWaiting] = useState<boolean>(constant.showWaiting);
-    const [today, setToday] = useState<string>(formatTimestamp(constant.currentDate, TimestampPrecision.day));
+    const actionChangeListeners = useRef<Set<(nextAction: Action, prevAction: Action) => void>>(new Set());
 
     useDepsEffect(() => {
-        document.title = `Directory ${getBasename(path) || separator}`;
-    }, [path]);
-
-    const goBack = useCallback((): void => {
-        const parentPath = getParentPath(path);
-        if (previousPath === parentPath) {
-            window.history.back();
-        } else {
-            window.location = clientPath.inodes(encodePath(parentPath)) as any; // TypeScript fix.
+        linkElement = linkElement ?? document.querySelector<HTMLLinkElement>("link[rel='icon']");
+        if (linkElement !== null) {
+            const parts = path.split(separator);
+            let icon = '/favicon';
+            let index = parts.length - 1;
+            while (index >= 0) {
+                const first = parts[index].charAt(0).toLowerCase();
+                if (/[a-z]/.test(first)) {
+                    icon = '/icons/alpha-' + first;
+                    break;
+                }
+                const found = umlauts[first];
+                if (found !== undefined) {
+                    icon = '/icons/alpha-' + found;
+                    break;
+                }
+                index--;
+            }
+            linkElement.href = process.env.PUBLIC_URL + icon + '.ico';
         }
-    }, [path, previousPath]);
-
-    const onHashChangeRef = useLatest((): void => {
-        setPreviousPath(path);
-        setPath(getCurrentPath());
-    });
-
-    useDepsEffect(() => {
-        const listener = () => onHashChangeRef.current();
-        window.addEventListener('hashchange', listener);
-        return () => window.removeEventListener('hashchange', listener);
-    }, []);
+        document.title = `Directory ${getName(path) || separator}`;
+    }, [path]);
 
     const handleAction = useCallback(
         (ev: React.MouseEvent) => {
@@ -111,60 +153,50 @@ export function DirectoryPage({
         },
         [previousPath]
     );
+    const onActionChange = useCallback(
+        (nextAction: Action) => {
+            focusNothing();
+            setAction(nextAction);
+            actionChangeListeners.current.forEach((listener) => listener(nextAction, action));
+        },
+        [action, setAction]
+    );
 
-    const onKeyDownRef = useLatest((ev: KeyboardEvent) => {
-        if (ev.key === 'Escape') {
-            if (ev.target === document.body) {
-                setAction(Action.view);
-            } else {
-                focusNothing();
-            }
-        } else if (ev.target === document.body) {
+    const onKeyDownRef = useLatest((ev: KeyboardEvent): boolean => {
+        if (ev.target === document.body) {
             const nextAction = keyToAction[ev.key];
             if (nextAction !== undefined) {
-                setAction(nextAction);
+                onActionChange(nextAction);
+                return true;
             }
+        } else if (ev.key === 'Escape') {
+            focusNothing();
+            return true;
         }
+        return false;
     });
 
     useDepsEffect(() => {
         const listener = (ev: KeyboardEvent) => onKeyDownRef.current(ev);
-        window.addEventListener('keydown', listener);
-        return () => window.removeEventListener('keydown', listener);
-    }, []);
+        appStore.keyDownListeners.add(listener);
+        return () => appStore.keyDownListeners.remove(listener);
+    }, [appStore.keyDownListeners]);
+
+    const suggestionControl = useMemo(() => suggestionStore.createSuggestionControl(path), [path, suggestionStore]);
 
     const pageContext = useMemo<DirectoryPageContext>(
         () => ({
-            action,
+            actionChangeListeners: {
+                add: (listener: (nextAction: Action, prevAction: Action) => void) => noop(actionChangeListeners.current.add(listener)),
+                remove: (listener: (nextAction: Action, prevAction: Action) => void) =>
+                    noop(actionChangeListeners.current.delete(listener)),
+            },
             appContext: context,
             comparator,
-            decentFile,
-            decentReadmeFile,
+            directoryPageParameter,
             dropdownContainerRef: watchHeightRef,
-            showAvailable,
-            showHidden,
-            showLastModified,
-            showMimeType,
-            showSize,
-            showThumbnail,
-            showWaiting,
-            today,
         }),
-        [
-            action,
-            comparator,
-            context,
-            decentFile,
-            decentReadmeFile,
-            showAvailable,
-            showHidden,
-            showLastModified,
-            showMimeType,
-            showSize,
-            showThumbnail,
-            showWaiting,
-            today,
-        ]
+        [comparator, context, directoryPageParameter]
     );
 
     return (
@@ -177,21 +209,26 @@ export function DirectoryPage({
                         className='position-relative'
                     >
                         <div hidden={!(path.length > 1)}>
-                            <div
-                                onClick={useCallback(
-                                    (ev: React.MouseEvent) => {
-                                        ev.stopPropagation();
-                                        goBack();
-                                    },
-                                    [goBack]
-                                )}
-                                className='hoverable p-2 text-center'
+                            <a
+                                href={paramsToHash(directoryPageParameter.getEncodedPath(getParentPath(path)))}
+                                className='d-block hoverable p-2 reboot text-center'
+                                onClick={stopPropagationAndFocusNothing}
                             >
                                 <span className='mdi mdi-subdirectory-arrow-right mdi-rotate-270' />
-                            </div>
+                            </a>
                             <hr className='m-0' />
                         </div>
+                        {canSearch && (
+                            <SearchComponent
+                                setPath={directoryPageParameter.setPath}
+                                setKeyboardControl={appStore.setKeyboardControl}
+                                path={path}
+                                spellCheck={appStore.appParameter.values.spellCheck}
+                                suggestionControl={suggestionControl}
+                            />
+                        )}
                         <DirectoryComponent
+                            setCanSearch={setCanSearch}
                             context={pageContext}
                             decentDirectory={decentDirectory}
                             inode={inode}
@@ -199,7 +236,7 @@ export function DirectoryPage({
                             setInode={setInode}
                             setIsReady={setIsReady}
                             path={path}
-                            spellCheck={spellCheck}
+                            suggestionControl={suggestionControl}
                         />
                         <hr className='m-0' />
                         <div style={{height: '30vh'}} />
@@ -213,10 +250,7 @@ export function DirectoryPage({
                         outline
                         color='primary'
                         active={action === Action.view}
-                        onClick={useCallback(() => {
-                            focusNothing();
-                            setAction(Action.view);
-                        }, [])}
+                        onClick={useCallback(() => onActionChange(Action.view), [onActionChange])}
                     >
                         <span className='mdi mdi-eye' />
                     </Button>
@@ -225,10 +259,7 @@ export function DirectoryPage({
                         outline
                         color='warning'
                         active={action === Action.edit}
-                        onClick={useCallback(() => {
-                            focusNothing();
-                            setAction(Action.edit);
-                        }, [])}
+                        onClick={useCallback(() => onActionChange(Action.edit), [onActionChange])}
                     >
                         <span className='mdi mdi-pencil' />
                     </Button>
@@ -236,10 +267,7 @@ export function DirectoryPage({
                         className='page-sidebar-icon'
                         outline
                         active={action === Action.reload}
-                        onClick={useCallback(() => {
-                            focusNothing();
-                            setAction(Action.reload);
-                        }, [])}
+                        onClick={useCallback(() => onActionChange(Action.reload), [onActionChange])}
                     >
                         <span className='mdi mdi-refresh' />
                     </Button>
@@ -248,10 +276,7 @@ export function DirectoryPage({
                         outline
                         color='success'
                         active={action === Action.add}
-                        onClick={useCallback(() => {
-                            focusNothing();
-                            setAction(Action.add);
-                        }, [])}
+                        onClick={useCallback(() => onActionChange(Action.add), [onActionChange])}
                     >
                         <span className='mdi mdi-plus' />
                     </Button>
@@ -260,10 +285,7 @@ export function DirectoryPage({
                         outline
                         color='danger'
                         active={action === Action.delete}
-                        onClick={useCallback(() => {
-                            focusNothing();
-                            setAction(Action.delete);
-                        }, [])}
+                        onClick={useCallback(() => onActionChange(Action.delete), [onActionChange])}
                     >
                         <span className='mdi mdi-trash-can' />
                     </Button>
@@ -285,25 +307,35 @@ export function DirectoryPage({
                     <ComparatorDropdown
                         className='page-sidebar-icon'
                         comparator={comparator}
-                        setComparator={setComparator}
                         hidden={keyboardControl !== undefined}
+                        setSortAlphabeticalAndAscending={setSortAlphabeticalAndAscending}
+                        setSortFoldersFirst={setSortFoldersFirst}
+                        setSortPriority={setSortPriority}
+                        setSortSpecialFirst={setSortSpecialFirst}
                     />
                     <MenuDropdown className='page-sidebar-icon' hidden={keyboardControl !== undefined}>
-                        <DropdownItemCheckbox checked={showAvailable} setChecked={setShowAvailable}>
-                            Available
+                        <DropdownItemCheckbox checked={showUnavailable} setChecked={setShowUnavailable}>
+                            Unavailable
                         </DropdownItemCheckbox>
-                        <DropdownItem hidden={!showAvailable} text toggle={false}>
+                        <DropdownItem hidden={showUnavailable} text toggle={false}>
                             <Input
                                 bsSize='sm'
                                 placeholder='Today'
                                 style={{width: '7.7rem'}}
                                 value={today}
-                                onChange={useCallback((ev: React.ChangeEvent<HTMLInputElement>) => setToday(ev.target.value), [])}
+                                onChange={useCallback((ev: React.ChangeEvent<HTMLInputElement>) => setToday(ev.target.value), [setToday])}
                             />
                         </DropdownItem>
                         <DropdownItemCheckbox checked={showHidden} setChecked={setShowHidden}>
                             Hidden
                         </DropdownItemCheckbox>
+                        <DropdownItemCheckbox checked={showNotRepeating} setChecked={setShowNotRepeating}>
+                            Not Repeating
+                        </DropdownItemCheckbox>
+                        <DropdownItemCheckbox hidden={showUnavailable} checked={showWaiting} setChecked={setShowWaiting}>
+                            Waiting
+                        </DropdownItemCheckbox>
+                        <DropdownItem divider />
                         <DropdownItemCheckbox checked={showLastModified} setChecked={setShowLastModified}>
                             Last Modified
                         </DropdownItemCheckbox>
@@ -316,9 +348,6 @@ export function DirectoryPage({
                         <DropdownItemCheckbox checked={showThumbnail} setChecked={setShowThumbnail}>
                             Thumbnails
                         </DropdownItemCheckbox>
-                        <DropdownItemCheckbox checked={showWaiting} setChecked={setShowWaiting}>
-                            Waiting
-                        </DropdownItemCheckbox>
                         <DropdownItem divider />
                         <DropdownItemCheckbox checked={decentDirectory} setChecked={setDecentDirectory}>
                             Decent <span className='mdi mdi-folder-outline' />
@@ -328,6 +357,9 @@ export function DirectoryPage({
                         </DropdownItemCheckbox>
                         <DropdownItemCheckbox checked={decentReadmeFile} setChecked={setDecentReadmeFile}>
                             Readme
+                        </DropdownItemCheckbox>
+                        <DropdownItemCheckbox checked={decentRunLastFile} setChecked={setDecentRunLastFile}>
+                            Run Last
                         </DropdownItemCheckbox>
                         <DropdownItem divider />
                         {appStore.spellCheckDropdownItem}

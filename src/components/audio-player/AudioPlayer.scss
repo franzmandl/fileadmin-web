@@ -1,0 +1,52 @@
+@import '../../scss/variables.scss';
+
+.audio-player {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-rows: auto auto;
+    border-top: 1px solid $same-color-as-hr;
+
+    > div {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    audio {
+        width: 100%;
+    }
+
+    .audio-player-left {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .audio-player-right {
+        grid-column: 3;
+        grid-row: 1;
+    }
+
+    @media only screen and (min-width: 768px) {
+        .audio-player-empty {
+            grid-column: 1 / 4;
+            grid-row: 2;
+        }
+
+        .audio-player-progress {
+            grid-column: 2;
+            grid-row: 1;
+        }
+    }
+
+    @media only screen and (max-width: 768px) {
+        .audio-player-empty {
+            grid-column: 2;
+            grid-row: 1;
+        }
+
+        .audio-player-progress {
+            grid-column: 1 / 4;
+            grid-row: 2;
+        }
+    }
+}

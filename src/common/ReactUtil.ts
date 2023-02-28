@@ -56,12 +56,12 @@ export function useConditionalEffect(condition: boolean, effect: EffectCallback)
     }, [condition]);
 }
 
-export function useLatest<T>(value: T): Readonly<ImmutableRefObject<T>> {
+export function useLatest<T>(value: T): ImmutableRefObject<T> {
     const valueRef = useRef(value);
     valueRef.current = value;
     return valueRef;
 }
 
-export function useSanitizedValue([value, setValue]: [string, Dispatch<string>], regExp: RegExp): [string, Dispatch<string>] {
-    return [removeMatches(value, regExp), useCallback((nextValue) => setValue(removeMatches(nextValue, regExp)), [regExp, setValue])];
+export function useSanitizedValue([value, setValue]: [string, Dispatch<string>], regex: RegExp): [string, Dispatch<string>] {
+    return [removeMatches(value, regex), useCallback((nextValue) => setValue(removeMatches(nextValue, regex)), [regex, setValue])];
 }

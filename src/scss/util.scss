@@ -1,5 +1,9 @@
 @import './variables.scss';
 
+.text-tag {
+    color: #9c9c9c;
+}
+
 .thumbnail {
     display: inline-block;
     height: $thumbnail-dimension;
@@ -19,6 +23,10 @@
 
 a.disabled {
     pointer-events: none;
+    color: inherit;
+}
+
+a.reboot {
     color: inherit;
 }
 

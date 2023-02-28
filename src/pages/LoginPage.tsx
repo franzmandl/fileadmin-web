@@ -1,6 +1,6 @@
 import {AxiosStatic} from 'axios';
 import {serverPath, constant, LocalStorageKey} from 'common/constants';
-import {FormGroupCheckbox} from 'components/FormGroupCheckbox';
+import {FormGroupCheckbox} from 'components/util/FormGroupCheckbox';
 import React, {useCallback, useState} from 'react';
 import {Button, Card, CardBody, CardHeader, Col, Form, FormGroup, Input, Label} from 'reactstrap';
 import './LoginPage.scss';
@@ -15,7 +15,7 @@ export function LoginPage({
     readonly axios: AxiosStatic;
     readonly context: AppContext;
 }): JSX.Element {
-    const [username, setUsername] = useState<string>(constant.username);
+    const [username, setUsername] = useState<string>(appStore.appParameter.values.username);
     const [password, setPassword] = useState<string>('');
     const [rememberMe, setRememberMe] = useState<boolean>(localStorage.getItem(LocalStorageKey.rememberMe) === 'true');
 

@@ -1,4 +1,4 @@
-import {AudioPlayerControl, createAudioPlayerControl, SetAudioPlayerControl} from 'components/AudioPlayerControl';
+import {AudioPlayerControl, createAudioPlayerControl, SetAudioPlayerControl} from 'components/audio-player/AudioPlayerControl';
 import {Inode} from 'model/Inode';
 import {useMemo, useState} from 'react';
 import {AppStore} from './useAppStore';

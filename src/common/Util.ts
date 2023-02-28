@@ -2,27 +2,16 @@ export const newLine = '\n';
 export const separator = '/';
 
 // Illegal characters taken from https://stackoverflow.com/questions/11721147/invalid-characters-in-a-filename-on-windows
-export const basenameAllowSlashRegExp = /**/ /[<>:"\\|?*\n\t]/g;
-export const windowsBasenameRegExp = /*   */ /[<>:"\\|?*\n\t/]/g;
+export const nameAllowSlashRegex = /**/ /[<>:"\\|?*\n\t]/g;
+export const windowsNameRegex = /*   */ /[<>:"\\|?*\n\t/]/g;
 
-const zeroWidthSpace = '\u200B';
+export const zeroWidthSpace = '\u200B';
 
 export function breakSpecialCharacters(string: string): string {
     return string.replace(/[#$(*+\-<=?@[^_{|~]/g, (x) => zeroWidthSpace + x).replace(/[!%).\\:;>/\]}]/g, (x) => x + zeroWidthSpace);
 }
 
-export function decodePath(path: string): string {
-    return (path || separator)
-        .split(separator)
-        .map((pathPart) => decodeURIComponent(pathPart))
-        .join(separator);
-}
-
-export function getCurrentPath(): string {
-    return decodePath(window.location.hash.substring(1));
-}
-
-export function getBasename(path: string): string {
+export function getName(path: string): string {
     return path.substring(path.lastIndexOf(separator) + 1);
 }
 
@@ -30,8 +19,19 @@ export function getParentPath(path: string): string {
     return path.substring(0, path.lastIndexOf(separator)) || separator;
 }
 
-export function appendSeparatorIfNecessary(path: string): string {
-    return path !== '' ? path + separator : '';
+export function resolvePath(parentPath: string, child: string): string {
+    if (child.startsWith('..' + separator)) {
+        return resolvePath(
+            parentPath === '' || parentPath === separator
+                ? separator
+                : parentPath.substring(0, Math.max(0, parentPath.lastIndexOf(separator))),
+            child.substring(3)
+        );
+    } else if (parentPath === '' || parentPath === separator) {
+        return separator + child;
+    } else {
+        return parentPath + separator + child;
+    }
 }
 
 export enum Type {
@@ -68,7 +68,10 @@ const mimeTypeToType = Object.freeze<Record<string, ReadonlyArray<Type> | undefi
     'text/markdown': [Type.text, Type.markdown],
 });
 
-export function getType(mimeType: string): ReadonlyArray<Type> {
+export function getType(mimeType: string | null): ReadonlyArray<Type> {
+    if (mimeType === null) {
+        return [];
+    }
     const lookup = mimeTypeToType[mimeType];
     if (lookup !== undefined) {
         return lookup;
@@ -103,7 +106,19 @@ export enum TimestampPrecision {
     second,
 }
 
-export function formatTimestamp(timestamp: Date | number, precision: TimestampPrecision): string {
+export const expressionToTimestampPrecision = Object.freeze<Record<string, TimestampPrecision | undefined>>({
+    nowYear: TimestampPrecision.year,
+    nowMonth: TimestampPrecision.month,
+    nowDay: TimestampPrecision.day,
+    nowHour: TimestampPrecision.hour,
+    nowMinute: TimestampPrecision.minute,
+    nowSecond: TimestampPrecision.second,
+});
+
+export function formatTimestamp(timestamp: Date | number | null, precision: TimestampPrecision, minuteAndSecondSeparator: string): string {
+    if (timestamp === null) {
+        return 'unknown';
+    }
     const date = new Date(timestamp);
     const stringBuilder = [String(date.getFullYear())];
 
@@ -125,10 +140,10 @@ export function formatTimestamp(timestamp: Date | number, precision: TimestampPr
         pushTwoDigits(' ', date.getHours());
     }
     if (TimestampPrecision.minute <= precision) {
-        pushTwoDigits(':', date.getMinutes());
+        pushTwoDigits(minuteAndSecondSeparator, date.getMinutes());
     }
     if (TimestampPrecision.second <= precision) {
-        pushTwoDigits(':', date.getSeconds());
+        pushTwoDigits(minuteAndSecondSeparator, date.getSeconds());
     }
     return stringBuilder.join('');
 }
@@ -152,7 +167,7 @@ export function ifMinusOne(value: number, alternativeValue: number): number {
 export function getOriginalIndent(indentedValue: string): string {
     // Any character except ^-]\ add that character to the possible matches for the character class.
     // https://stackoverflow.com/questions/3210701/special-characters-in-regex-brackets
-    return indentedValue.match(/^([ \t]*(((- )?\[[x ]\]|(- )?\([!/?iox ]\)|[+\-=>~]) )?)/)?.[1] ?? '';
+    return indentedValue.match(/^([ \t]*(((- )?\[[x ]\]|(- )?\([!/?iox ]\)|(- )?\+{2}|(- )?-{2}|(- )?\+-|[+\-=>~]) )?)/)?.[1] ?? '';
 }
 
 export function getIndent(indentedValue: string): string {
@@ -163,8 +178,8 @@ export function getIndentOfLastLine(content: string): string {
     return getIndent(content.substring(content.lastIndexOf(newLine) + 1));
 }
 
-export function removeMatches(value: string, regExp: RegExp): string {
-    return value.replaceAll(regExp, '');
+export function removeMatches(value: string, regex: RegExp): string {
+    return value.replaceAll(regex, '');
 }
 
 /**
@@ -182,23 +197,68 @@ export function arrayShuffleInPlace<T>(array: T[]): T[] {
     return array;
 }
 
+export function arrayRemoveInPlace<T>(array: T[], value: T): T[] {
+    const index = array.indexOf(value);
+    if (index !== -1) {
+        array.splice(index, 1);
+    }
+    return array;
+}
+
 // Taken from https://stackoverflow.com/questions/4467539/javascript-modulo-gives-a-negative-result-for-negative-numbers
 export function mod(n: number, m: number) {
     return ((n % m) + m) % m;
-}
-
-export const noop: (..._: ReadonlyArray<unknown>) => void = () => undefined;
-
-export function identity<T>(value: T): T {
-    return value;
 }
 
 export function alwaysThrow(error: unknown): never {
     throw error;
 }
 
+export function identity<T>(value: T): T {
+    return value;
+}
+
+export const noop: (..._: ReadonlyArray<unknown>) => void = () => undefined;
+
+export function wait(ms: number) {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
+
 export function createFormData(record: Readonly<Record<string, string | Blob>>): FormData {
     const formData = new FormData();
     Object.entries(record).forEach(([name, value]) => formData.append(name, value));
     return formData;
+}
+
+export function getHashParams(): URLSearchParams {
+    return new URLSearchParams(window.location.hash.substring(1));
+}
+
+export function appendParam(params: URLSearchParams, name: string, value: string): URLSearchParams {
+    params.append(name, value);
+    return params;
+}
+
+export function setOrDeleteParam(params: URLSearchParams, condition: boolean, name: string, value: string) {
+    if (condition) {
+        params.set(name, value);
+    } else {
+        params.delete(name);
+    }
+}
+
+export function paramsToHash(params: URLSearchParams): string {
+    return '#' + params.toString().replaceAll('%2F', separator);
+}
+
+export function pushHash(params: URLSearchParams) {
+    window.history.pushState(null, '', paramsToHash(params)); // Does not fire hashchange-event.
+    return params;
+}
+
+export function replaceHash(params: URLSearchParams) {
+    window.history.replaceState(null, '', paramsToHash(params)); // Does not fire hashchange-event.
+    return params;
 }

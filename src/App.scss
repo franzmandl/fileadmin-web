@@ -5,6 +5,12 @@
     grid-template-rows: 1fr auto auto;
     height: 100%;
 
+    @media only screen and (max-width: 768px) and (max-aspect-ratio: 13/9), screen and (min-width: 768px) and (max-aspect-ratio: 7/9) {
+        &.app-keyboard {
+            height: 55vh;
+        }
+    }
+
     > :first-child {
         grid-column: 1;
         grid-row: 1;

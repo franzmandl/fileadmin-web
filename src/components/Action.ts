@@ -6,10 +6,10 @@ export enum Action {
     add = 'add',
 }
 
-const actions: ReadonlyArray<string | null> = Object.values(Action);
+const actions: ReadonlyArray<string> = Object.values(Action);
 
-export function parseAction(action: string | null): Action {
-    return actions.indexOf(action) !== -1 ? (action as Action) : Action.view;
+export function parseAction(value: string | null): Action | null {
+    return value !== null && actions.indexOf(value) !== -1 ? (value as Action) : null;
 }
 
 export const keyToAction = Object.freeze<Record<string, Action | undefined>>({
@@ -18,4 +18,6 @@ export const keyToAction = Object.freeze<Record<string, Action | undefined>>({
     r: Action.reload,
     a: Action.add,
     d: Action.delete,
+    Delete: Action.delete,
+    Escape: Action.view,
 });

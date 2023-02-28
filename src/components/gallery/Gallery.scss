@@ -1,0 +1,65 @@
+@import '../../scss/variables.scss';
+
+.gallery {
+    .page-main {
+        background-color: $backdrop-bg;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr auto;
+        position: relative;
+
+        .gallery-main {
+            grid-column: 1 / 3;
+            grid-row: 1;
+            height: 100%;
+            position: relative;
+            width: 100%;
+
+            img {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) rotate(var(--rotate, 0deg)); // Inspired by https://www.youtube.com/watch?v=pKO1ktPQByk
+                max-height: 100%;
+                max-width: 100%;
+
+                &.rotate-90 {
+                    --rotate: 90deg;
+                    max-height: 95vw;
+                    max-width: 95vh;
+                }
+
+                &.rotate-180 {
+                    --rotate: 180deg;
+                }
+
+                &.rotate-270 {
+                    --rotate: 270deg;
+                    max-height: 95vw;
+                    max-width: 95vh;
+                }
+            }
+        }
+
+        .gallery-overlay {
+            cursor: pointer;
+            text-shadow: -1px 0 black, 0 1px black, 1px 0 black, 0 -1px black;
+            z-index: 0; // Makes order in DOM matter.
+        }
+
+        .gallery-left {
+            grid-column: 1 / 2;
+            grid-row: 1;
+        }
+
+        .gallery-right {
+            grid-column: 2 / 3;
+            grid-row: 1;
+        }
+
+        .gallery-bottom {
+            grid-column: 1 / 3;
+            grid-row: 2;
+        }
+    }
+}

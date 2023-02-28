@@ -1,32 +1,36 @@
-import {ReactNode, useCallback, useMemo} from 'react';
+import {ReactNode, useCallback, useMemo, useState} from 'react';
 import axios from 'axios';
 import {Alert} from 'reactstrap';
 import {DirectoryPage} from 'pages/DirectoryPage';
 import {InodeStore} from 'stores/InodeStore';
 import {FilePage} from 'pages/FilePage';
 import {LoginPage} from 'pages/LoginPage';
-import {constant, AppLocation} from 'common/constants';
-import {LoadingIndicator} from 'components/LoadingIndicator';
-import {ModalComponent} from 'components/ModalComponent';
-import {ConsoleComponent} from 'components/ConsoleComponent';
+import {AppLocation, ParamName} from 'common/constants';
+import {LoadingIndicator} from 'components/util/LoadingIndicator';
+import {ModalComponent} from 'components/util/ModalComponent';
+import {ConsoleComponent} from 'components/console/ConsoleComponent';
 import './App.scss';
 import {AppContext} from 'stores/AppContext';
 import {Toaster} from 'react-hot-toast';
-import {Gallery} from 'components/Gallery';
+import {Gallery} from 'components/gallery/Gallery';
 import {useAppStore} from 'stores/useAppStore';
-import {AudioPlayer} from 'components/AudioPlayer';
+import {AudioPlayer} from 'components/audio-player/AudioPlayer';
 import {useAudioPlayerStore} from 'stores/useAudioPlayerStore';
 import {useAuthenticationStore} from 'stores/useAuthenticationStore';
 import {useConsoleStore} from 'stores/useConsoleStore';
 import {useGalleryStore} from 'stores/useGalleryStore';
+import {useDepsEffect} from 'common/ReactUtil';
+import {useSuggestionStore} from 'stores/useSuggestionStore';
+
+const inodeStore = new InodeStore(axios);
 
 export function App(): JSX.Element {
-    const inodeStore = useMemo(() => new InodeStore(axios), []);
-    const {appStore, isLoading, keyboardControl, modalContent, spellCheck} = useAppStore();
+    const {appStore, isLoading, keyboardControl, modalContent} = useAppStore();
     const {audioPlayerControl, audioPlayerStore} = useAudioPlayerStore(appStore);
     const {consoleEntries, consoleStore, setShowConsole, showConsole} = useConsoleStore();
     const {authenticationStore, isLoggedIn} = useAuthenticationStore(axios, appStore, consoleStore);
-    const {galleryControl, galleryStore} = useGalleryStore(isLoggedIn);
+    const {galleryControl, galleryStore} = useGalleryStore(appStore, isLoggedIn);
+    const suggestionStore = useSuggestionStore(appStore, consoleStore, inodeStore);
 
     const context = useMemo<AppContext>(
         () => ({
@@ -36,12 +40,22 @@ export function App(): JSX.Element {
             consoleStore,
             galleryStore,
             inodeStore,
+            suggestionStore,
         }),
-        [appStore, audioPlayerStore, authenticationStore, consoleStore, galleryStore, inodeStore]
+        [appStore, audioPlayerStore, authenticationStore, consoleStore, galleryStore, suggestionStore]
     );
 
+    // Fix that soft-keyboards do not reduce page height any more.
+    const [classNames, setClassNames] = useState<string>('');
+    useDepsEffect(() => {
+        // Delayed to let the click events of the sidebar buttons through.
+        setTimeout(() => {
+            setClassNames(keyboardControl !== undefined ? 'app-keyboard' : '');
+        }, 200);
+    }, [keyboardControl]);
+
     return (
-        <div className='app'>
+        <div className={`app ${classNames}`}>
             {renderPage()}
             {audioPlayerControl && <AudioPlayer audioPlayerControl={audioPlayerControl} context={context} />}
             <ConsoleComponent
@@ -50,7 +64,7 @@ export function App(): JSX.Element {
                 hide={useCallback(() => setShowConsole(false), [setShowConsole])}
             />
             {galleryControl !== undefined && (
-                <Gallery context={context} galleryControl={galleryControl} keyboardControl={keyboardControl} spellCheck={spellCheck} />
+                <Gallery context={context} galleryControl={galleryControl} keyboardControl={keyboardControl} />
             )}
             <div ref={appStore.modalContainerRef} className='app-modal-container' />
             {isLoading && <LoadingIndicator />}
@@ -62,18 +76,19 @@ export function App(): JSX.Element {
     function renderPage(): ReactNode {
         if (!isLoggedIn) {
             return <LoginPage axios={axios} context={context} />;
-        } else if (constant.location === AppLocation.inodes) {
-            return <DirectoryPage context={context} keyboardControl={keyboardControl} spellCheck={spellCheck} />;
-        } else if (constant.location === AppLocation.edit) {
-            if (constant.path !== null) {
-                return <FilePage context={context} keyboardControl={keyboardControl} path={constant.path} spellCheck={spellCheck} />;
+        } else if (appStore.appParameter.values.location === AppLocation.inodes) {
+            return <DirectoryPage context={context} keyboardControl={keyboardControl} />;
+        } else if (appStore.appParameter.values.location === AppLocation.edit) {
+            const path = appStore.currentParams.get(ParamName.path);
+            if (path !== null) {
+                return <FilePage context={context} keyboardControl={keyboardControl} path={path} />;
             } else {
                 return <PageAlert>Path missing.</PageAlert>;
             }
         } else {
             return (
                 <PageAlert>
-                    Location <i>{constant.location}</i> not found.
+                    Location <i>{appStore.appParameter.values.location}</i> not found.
                 </PageAlert>
             );
         }

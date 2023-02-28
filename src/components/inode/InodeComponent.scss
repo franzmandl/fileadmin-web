@@ -1,0 +1,20 @@
+@import '../../scss/variables.scss';
+
+.inode-component {
+    > .inode-component-indent {
+        border-left: 1px solid $same-color-as-hr;
+        margin-left: 1rem;
+    }
+
+    > .virtual {
+        background-color: rgba(#9318ff, 0.075);
+    }
+
+    > .visited {
+        background-color: rgba($secondary, 0.075);
+    }
+
+    > .virtual.visited {
+        background-color: rgba(#dcb3ff, 0.083);
+    }
+}

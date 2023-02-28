@@ -1,7 +1,9 @@
-import {AxiosResponse, AxiosStatic} from 'axios';
+import {AxiosPromise, AxiosResponse, AxiosStatic} from 'axios';
 import {getResponseData} from 'common/AxiosUtil';
+import {compareNatural} from 'common/Comparator';
 import {serverFormData, serverPath, constant} from 'common/constants';
-import {appendSeparatorIfNecessary, encodePath, identity, separator} from 'common/Util';
+import {encodePath, identity, resolvePath} from 'common/Util';
+import {Command} from 'model/Command';
 import {BaseDirectory, createDirectory, Directory} from 'model/Directory';
 import {FileContent} from 'model/FileContent';
 import {BaseInode, createInode, Inode} from 'model/Inode';
@@ -13,54 +15,63 @@ export class InodeStore {
 
     readonly getDirectory = (path: string): Promise<Directory> =>
         this.axios
-            .get<BaseDirectory>(serverPath.authenticatedPath.directory(encodePath(path)), {
-                withCredentials: true,
-            })
+            .get<BaseDirectory>(serverPath.authenticatedPath.directory(encodePath(path)), {withCredentials: true})
             .then(createDirectoryFromResponse);
 
     readonly getInode = (path: string): Promise<Inode> =>
         this.axios
-            .get<BaseInode>(serverPath.authenticatedPath.inode(encodePath(path)), {
+            .get<BaseInode>(serverPath.authenticatedPath.inode(encodePath(path)), {withCredentials: true})
+            .then(createInodeFromResponse);
+
+    readonly getSuggestion = (path: string, word: string): Promise<ReadonlyArray<string>> =>
+        this.axios
+            .get<string[]>(serverPath.authenticatedPath.suggestion(encodePath(path), encodeURIComponent(word)), {
                 withCredentials: true,
             })
-            .then(createInodeFromResponse);
+            .then(getResponseData)
+            .then((suggestions) => {
+                const startsWithWordRegex = new RegExp('^' + word.replaceAll(/[^\p{L}\d_]/gu, ''), 'i');
+                return suggestions.sort((a: string, b: string) => {
+                    if (a.match(startsWithWordRegex)) {
+                        if (!b.match(startsWithWordRegex)) {
+                            return -1;
+                        }
+                    } else if (b.match(startsWithWordRegex)) {
+                        return 1;
+                    }
+                    return compareNatural(a, b);
+                });
+            });
+
+    private readonly applyCommand = <T>(command: Command): AxiosPromise<T> =>
+        this.axios.post<T>(serverPath.authenticatedPath.command(), command, {withCredentials: true});
 
     readonly add = (path: string, newInode: NewInode): Promise<Inode> =>
-        this.axios
-            .post<BaseInode>(
-                serverPath.authenticatedPath.add(encodePath(path), encodePath(newInode.basename), newInode.isFile),
-                undefined,
-                {
-                    withCredentials: true,
-                }
-            )
-            .then(createInodeFromResponse);
+        this.applyCommand<BaseInode>({
+            _type: 'Add',
+            path,
+            newInode,
+        }).then(createInodeFromResponse);
+
+    readonly delete = (inode: Inode): Promise<void> =>
+        this.applyCommand<void>({
+            _type: 'Delete',
+            path: inode.path,
+        }).then(getResponseData);
 
     readonly move = (inode: Inode, relativeDestination: string): Promise<Inode> =>
-        this.axios
-            .post<BaseInode>(
-                serverPath.authenticatedPath.move(
-                    encodePath(inode.path),
-                    encodePath(separator + appendSeparatorIfNecessary(inode.dirname) + relativeDestination)
-                ),
-                undefined,
-                {
-                    withCredentials: true,
-                }
-            )
-            .then(createInodeFromResponse);
-
-    readonly remove = (inode: Inode): Promise<void> =>
-        this.axios.get(serverPath.authenticatedPath.remove(encodePath(inode.path)), {
-            withCredentials: true,
-        });
+        this.applyCommand<BaseInode>({
+            _type: 'Move',
+            path: inode.path,
+            newPath: resolvePath(inode.parentPath, relativeDestination),
+        }).then(createInodeFromResponse);
 
     readonly share = (path: string, days: number): Promise<ReadonlyArray<Share>> =>
-        this.axios
-            .get<ReadonlyArray<Share>>(serverPath.authenticatedPath.share(encodePath(path), days), {
-                withCredentials: true,
-            })
-            .then(getResponseData);
+        this.applyCommand<ReadonlyArray<Share>>({
+            _type: 'Share',
+            path,
+            days,
+        }).then(getResponseData);
 
     readonly getFile = (path: string): Promise<FileContent> =>
         this.axios
@@ -70,7 +81,7 @@ export class InodeStore {
             })
             .then(createFileContentFromResponse);
 
-    readonly postFile = (path: string, lastModified: number, file: File): Promise<Inode> =>
+    readonly postFile = (path: string, lastModified: number | null, file: File): Promise<Inode> =>
         this.axios
             .post<BaseInode>(serverPath.authenticatedPath.file(encodePath(path)), serverFormData.authenticatedPath.file(file), {
                 withCredentials: true,
@@ -98,7 +109,8 @@ function createDirectoryFromResponse({data}: AxiosResponse<BaseDirectory>): Dire
 }
 
 function createFileContentFromResponse({data, headers}: AxiosResponse<string>): FileContent {
-    return {lastModified: Number(headers[constant.header.lastModified]), value: data};
+    const lastModified = headers[constant.header.lastModified];
+    return {lastModified: lastModified !== undefined ? Number(lastModified) : null, value: data};
 }
 
 function createInodeFromResponse({data}: AxiosResponse<BaseInode>): Inode {
