@@ -2,7 +2,7 @@ import {focusNothing, stopPropagation, useDepsLayoutEffect} from 'common/ReactUt
 import {useSanitizedValue} from 'common/ReactUtil';
 import {expressionToTimestampPrecision, formatTimestamp, windowsNameRegex} from 'common/Util';
 import {NewInode} from 'model/NewInode';
-import React, {useCallback, useState} from 'react';
+import React, {useState} from 'react';
 import {Button} from 'reactstrap';
 import {AutoResizeTextarea} from 'components/textarea/AutoResizeTextarea';
 import {SetKeyboardControl} from 'components/keyboard-control/KeyboardControl';
@@ -37,20 +37,17 @@ export function AddInodeComponent({
         setCursorPosition(evaluatedCursorPosition);
     }, [evaluatedCursorPosition, newInodeTemplate]);
 
-    const submit = useCallback(() => {
+    const submit = (): void => {
         onAdd({name, isFile}, addInodeAfterIndex);
         setName(evaluatedName);
         setIsFile(newInodeTemplate.isFile);
         setCursorPosition(evaluatedCursorPosition);
-    }, [onAdd, name, isFile, addInodeAfterIndex, setName, evaluatedName, newInodeTemplate.isFile, evaluatedCursorPosition]);
+    };
 
-    const onSaveKeyDown = useCallback(
-        (ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
-            ev.preventDefault();
-            submit();
-        },
-        [submit]
-    );
+    const onSaveKeyDown = (ev: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+        ev.preventDefault();
+        submit();
+    };
 
     return (
         <div style={{display: 'grid', gridTemplateColumns: '1fr auto auto'}} onClick={stopPropagation}>
@@ -68,25 +65,22 @@ export function AddInodeComponent({
             />
             <Button
                 className='m-1'
-                onClick={useCallback((ev: React.MouseEvent) => {
+                onClick={(ev): void => {
                     ev.stopPropagation();
                     focusNothing();
                     setIsFile((prev) => !prev);
-                }, [])}
+                }}
             >
                 <span className={`mdi ${isFile ? 'mdi-file' : 'mdi-folder'}`} />
             </Button>
             <Button
                 className='m-1'
                 color='success'
-                onClick={useCallback(
-                    (ev: React.MouseEvent) => {
-                        ev.stopPropagation();
-                        focusNothing();
-                        submit();
-                    },
-                    [submit]
-                )}
+                onClick={(ev): void => {
+                    ev.stopPropagation();
+                    focusNothing();
+                    submit();
+                }}
             >
                 <span className='mdi mdi-plus' />
             </Button>

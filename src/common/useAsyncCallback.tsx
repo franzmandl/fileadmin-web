@@ -1,4 +1,3 @@
-import {useCallback} from 'react';
 import {useLatest} from './ReactUtil';
 
 /**
@@ -16,26 +15,23 @@ export function useAsyncCallback<T, A extends ReadonlyArray<unknown>, R>(
     const onFulfilledRef = useLatest(onFulfilled);
     const onRejectedRef = useLatest(onRejected);
     const onFinallyRef = useLatest(onFinally);
-    return useCallback(
-        (...args: A) => {
-            const promise = callbackRef.current(...args);
-            if (promise instanceof Promise) {
-                return promise
-                    .then(
-                        (value) => onFulfilledRef.current(value, ...args),
-                        (error) => onRejectedRef.current(error, ...args)
-                    )
-                    .finally(() => onFinallyRef.current?.(...args));
-            } else {
-                try {
-                    return Promise.resolve(onFulfilledRef.current(promise, ...args));
-                } catch (error) {
-                    return Promise.resolve(onRejectedRef.current(error, ...args));
-                } finally {
-                    onFinallyRef.current?.(...args);
-                }
+    return (...args: A) => {
+        const promise = callbackRef.current(...args);
+        if (promise instanceof Promise) {
+            return promise
+                .then(
+                    (value) => onFulfilledRef.current(value, ...args),
+                    (error) => onRejectedRef.current(error, ...args)
+                )
+                .finally(() => onFinallyRef.current?.(...args));
+        } else {
+            try {
+                return Promise.resolve(onFulfilledRef.current(promise, ...args));
+            } catch (error) {
+                return Promise.resolve(onRejectedRef.current(error, ...args));
+            } finally {
+                onFinallyRef.current?.(...args);
             }
-        },
-        [callbackRef, onRejectedRef, onFinallyRef, onFulfilledRef]
-    );
+        }
+    };
 }

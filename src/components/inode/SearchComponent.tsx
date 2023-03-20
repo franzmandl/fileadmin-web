@@ -2,7 +2,7 @@ import {separator} from 'common/Util';
 import {SetKeyboardControl} from 'components/keyboard-control/KeyboardControl';
 import {AutoResizeTextarea} from 'components/textarea/AutoResizeTextarea';
 import {SuggestionControl} from 'components/textarea/RichTextarea';
-import {Dispatch, useCallback, useState} from 'react';
+import {Dispatch, useState} from 'react';
 import {Button} from 'reactstrap';
 import './SearchComponent.scss';
 
@@ -20,21 +20,18 @@ export function SearchComponent({
     readonly suggestionControl: SuggestionControl;
 }): JSX.Element {
     const [value, setValue] = useState<string>('#');
-    const search = useCallback(() => {
+    const search = (): void => {
         setPath((path === separator ? '' : path) + value.replaceAll('#', separator));
         setValue('#');
-    }, [setPath, path, value]);
+    };
     return (
         <div className='search-component'>
             <AutoResizeTextarea
                 setKeyboardControl={setKeyboardControl}
-                onEnterKeyDown={useCallback(
-                    (ev: React.KeyboardEvent) => {
-                        ev.preventDefault();
-                        search();
-                    },
-                    [search]
-                )}
+                onEnterKeyDown={(ev): void => {
+                    ev.preventDefault();
+                    search();
+                }}
                 spellCheck={spellCheck}
                 suggestionControl={suggestionControl}
                 textareaClassName='font-monospace ps-2'

@@ -24,7 +24,7 @@ export function useAppParameter(
 ): AppParameter {
     return useMemo(() => {
         const values = decodeValues(currentParams);
-        const replace = (partialValues: Partial<AppParameterValues>) =>
+        const replace = (partialValues: Partial<AppParameterValues>): void =>
             setCurrentParams((prevParams) => replaceHash(encodeValues(prevParams, {...values, ...partialValues})));
         return {
             encoded: encodeValues(parentParams, values),

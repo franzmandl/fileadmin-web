@@ -6,6 +6,8 @@ import {Task} from './Task';
 
 export interface BaseInode {
     readonly error: string | null;
+    readonly filterHighlightTags: ReadonlyArray<string> | null;
+    readonly filterOutputPath: string | null;
     readonly friendlyName: string | null;
     readonly isDirectory: boolean;
     readonly isFile: boolean;
@@ -27,6 +29,7 @@ export interface BaseInode {
 export interface Inode extends BaseInode {
     readonly canAnyAdd: boolean;
     readonly canAnyGet: boolean;
+    readonly filterHighlightTagSet: ReadonlySet<string> | null;
     readonly name: string;
     readonly orderName: string;
     readonly parentLocalPath: string | null;
@@ -41,6 +44,7 @@ export function createInode(inode: BaseInode): Inode {
         ...inode,
         canAnyAdd: inode.operation.canDirectoryAdd || inode.operation.canFileSet,
         canAnyGet: inode.operation.canDirectoryGet || inode.operation.canFileGet,
+        filterHighlightTagSet: inode.filterHighlightTags !== null ? new Set(inode.filterHighlightTags) : null,
         name,
         orderName: inode.friendlyName ?? name,
         parentLocalPath: inode.localPath !== null ? getParentPath(inode.localPath) : null,
@@ -72,6 +76,8 @@ export function getDownloadPath({operation}: Pick<Inode, 'operation'>, encodedPa
 
 export const emptyInode = createInode({
     error: null,
+    filterHighlightTags: [],
+    filterOutputPath: null,
     friendlyName: null,
     isDirectory: false,
     isFile: false,
@@ -93,6 +99,8 @@ export const emptyInode = createInode({
         canInodeMove: false,
         canInodeRename: false,
         canInodeShare: false,
+        canInodeToDirectory: false,
+        canInodeToFile: false,
     },
     parentOperation: null,
     path: '',

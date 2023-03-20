@@ -3,7 +3,7 @@ import {useDepsEffect} from 'common/ReactUtil';
 import {useDelayed} from 'common/useDelayed';
 import {encodePath, getName} from 'common/Util';
 import {MenuDropdown} from 'components/dropdown/MenuDropdown';
-import React, {useCallback, useMemo, useState} from 'react';
+import {useState} from 'react';
 import {Button} from 'reactstrap';
 import {RichTextarea} from 'components/textarea/RichTextarea';
 import {FileContent} from 'model/FileContent';
@@ -62,11 +62,11 @@ export function FilePage({
         constant.saveTimeoutMs
     );
 
-    const saveNowIfUnsaved = useCallback(() => {
+    const saveNowIfUnsaved = (): void => {
         if (state.saved !== SaveState.saved) {
             saveNow();
         }
-    }, [state.saved, saveNow]);
+    };
 
     useDepsEffect(() => {
         if (state.saved === SaveState.waiting) {
@@ -74,7 +74,7 @@ export function FilePage({
         }
     }, [state]);
 
-    const suggestionControl = useMemo(() => suggestionStore.createSuggestionControl(path), [path, suggestionStore]);
+    const suggestionControl = suggestionStore.createSuggestionControl(path);
 
     return (
         <div className='page page-auto'>
@@ -83,23 +83,18 @@ export function FilePage({
                 <RichTextarea
                     autoFocus
                     className='h-100'
-                    onCtrlSKeyDown={useCallback(
-                        (ev: React.SyntheticEvent) => {
-                            ev.preventDefault();
-                            saveNowIfUnsaved();
-                        },
-                        [saveNowIfUnsaved]
-                    )}
+                    onCtrlSKeyDown={(ev): void => {
+                        ev.preventDefault();
+                        saveNowIfUnsaved();
+                    }}
                     setKeyboardControl={appStore.setKeyboardControl}
                     spellCheck={appStore.appParameter.values.spellCheck}
                     suggestionControl={suggestionControl}
                     textareaClassName='h-100 w-100 font-monospace ps-2'
                     value={state.content.value}
-                    setValue={useCallback(
-                        (value) =>
-                            setState((prev) => ({saved: SaveState.waiting, content: {lastModified: prev.content.lastModified, value}})),
-                        []
-                    )}
+                    setValue={(value): void =>
+                        setState((prev) => ({saved: SaveState.waiting, content: {lastModified: prev.content.lastModified, value}}))
+                    }
                 />
             </div>
             <div className='page-sidebar'>
@@ -107,19 +102,19 @@ export function FilePage({
                     <Button
                         className='page-sidebar-icon'
                         color='success'
-                        onClick={useCallback(() => {
+                        onClick={(): void => {
                             focusNothing();
                             saveNowIfUnsaved();
-                        }, [saveNowIfUnsaved])}
+                        }}
                     >
                         <span className='mdi mdi-content-save-outline' />
                     </Button>
                     <Button
                         className='page-sidebar-icon'
-                        onClick={useCallback(() => {
+                        onClick={(): void => {
                             focusNothing();
                             load();
-                        }, [load])}
+                        }}
                     >
                         <span className='mdi mdi-refresh' />
                     </Button>

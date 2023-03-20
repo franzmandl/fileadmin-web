@@ -1,14 +1,4 @@
-import {
-    BaseSyntheticEvent,
-    DependencyList,
-    Dispatch,
-    EffectCallback,
-    MutableRefObject,
-    useCallback,
-    useEffect,
-    useLayoutEffect,
-    useRef,
-} from 'react';
+import {BaseSyntheticEvent, DependencyList, Dispatch, EffectCallback, MutableRefObject, useEffect, useLayoutEffect, useRef} from 'react';
 import {removeMatches} from './Util';
 
 export function stopPropagation(ev: BaseSyntheticEvent): void {
@@ -63,5 +53,5 @@ export function useLatest<T>(value: T): ImmutableRefObject<T> {
 }
 
 export function useSanitizedValue([value, setValue]: [string, Dispatch<string>], regex: RegExp): [string, Dispatch<string>] {
-    return [removeMatches(value, regex), useCallback((nextValue) => setValue(removeMatches(nextValue, regex)), [regex, setValue])];
+    return [removeMatches(value, regex), (nextValue): void => setValue(removeMatches(nextValue, regex))];
 }

@@ -1,7 +1,7 @@
 import {focusNothing} from 'common/ReactUtil';
 import {useSanitizedValue} from 'common/ReactUtil';
 import {nameAllowSlashRegex} from 'common/Util';
-import {Dispatch, useCallback} from 'react';
+import {Dispatch} from 'react';
 import {Button} from 'reactstrap';
 import {AutoResizeTextarea} from 'components/textarea/AutoResizeTextarea';
 import {SetKeyboardControl} from 'components/keyboard-control/KeyboardControl';
@@ -25,19 +25,16 @@ export function MoveInodeComponent({
     readonly newName: string;
     readonly setNewName: Dispatch<string>;
     readonly newNameCursorPosition: number | undefined;
-    readonly setNewNameCursorPosition: Dispatch<number | undefined>;
+    readonly setNewNameCursorPosition?: Dispatch<number | undefined>;
     readonly spellCheck: boolean;
     readonly suggestionControl: SuggestionControl;
 }): JSX.Element {
     const [, setNewSanitizedName] = useSanitizedValue([newName, setNewName], nameAllowSlashRegex);
 
-    const onSaveKeyDown = useCallback(
-        (ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
-            ev.preventDefault();
-            moveToNewName();
-        },
-        [moveToNewName]
-    );
+    const onSaveKeyDown = (ev: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+        ev.preventDefault();
+        moveToNewName();
+    };
 
     return (
         <div className='move-inode-component'>
@@ -56,14 +53,11 @@ export function MoveInodeComponent({
             <Button
                 className='m-1'
                 color={newName !== oldName ? 'success' : 'dark'}
-                onClick={useCallback(
-                    (ev: React.MouseEvent) => {
-                        ev.stopPropagation();
-                        focusNothing();
-                        moveToNewName();
-                    },
-                    [moveToNewName]
-                )}
+                onClick={(ev): void => {
+                    ev.stopPropagation();
+                    focusNothing();
+                    moveToNewName();
+                }}
             >
                 <span className={`mdi ${newName !== oldName ? 'mdi-content-save-outline' : 'mdi-close'}`} />
             </Button>

@@ -1,6 +1,6 @@
 import {tagEndingRegex, tagRegex} from 'common/constants';
 import {wait} from 'common/Util';
-import {SuggestionControl} from 'components/textarea/RichTextarea';
+import {OnSuggestionReturnType, SuggestionControl} from 'components/textarea/RichTextarea';
 import {useMemo} from 'react';
 import {ReadonlyTextRange} from 'typescript';
 import {InodeStore} from './InodeStore';
@@ -12,12 +12,12 @@ export interface SuggestionStore {
 }
 
 export function useSuggestionStore(appStore: AppStore, consoleStore: ConsoleStore, inodeStore: InodeStore): SuggestionStore {
-    return useMemo<SuggestionStore>(
+    return useMemo(
         () => ({
             createSuggestionControl: (path: string | undefined): SuggestionControl => ({
                 getSuggestions:
                     path === undefined
-                        ? () => Promise.resolve([])
+                        ? (): Promise<ReadonlyArray<string>> => Promise.resolve([])
                         : (textarea: HTMLTextAreaElement): Promise<ReadonlyArray<string>> => {
                               const {pos, end} = getTextRange(textarea);
                               return end - pos < 2
@@ -25,7 +25,7 @@ export function useSuggestionStore(appStore: AppStore, consoleStore: ConsoleStor
                                   : inodeStore.getSuggestion(path, textarea.value.substring(pos, end));
                           },
                 onError: consoleStore.handleError,
-                onSuggestion: (textarea: HTMLTextAreaElement, suggestion: string) => {
+                onSuggestion: (textarea: HTMLTextAreaElement, suggestion: string): OnSuggestionReturnType => {
                     const {pos, end} = getTextRange(textarea);
                     appStore.indicateLoading(wait(200)); // Prevent all click events for 200ms. Necessary on mobile devices.
                     return {

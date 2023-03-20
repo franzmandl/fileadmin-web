@@ -9,4 +9,6 @@ export interface Operation {
     readonly canInodeMove: boolean;
     readonly canInodeRename: boolean;
     readonly canInodeShare: boolean;
+    readonly canInodeToDirectory: boolean;
+    readonly canInodeToFile: boolean;
 }

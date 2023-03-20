@@ -1,11 +1,11 @@
-import {alwaysThrow, arrayRemoveInPlace, getHashParams, identity, noop} from 'common/Util';
+import {alwaysThrow, arrayRemoveInPlace, getHashParams, identity} from 'common/Util';
 import {ModalContent} from 'components/util/ModalComponent';
-import {Dispatch, ReactNode, SetStateAction, useCallback, useMemo, useRef, useState} from 'react';
+import {Dispatch, ReactNode, SetStateAction, useMemo, useRef, useState} from 'react';
 import {Button} from 'reactstrap';
 import toast from 'react-hot-toast';
 import {useAsyncCallback} from 'common/useAsyncCallback';
 import {KeyboardControl, SetKeyboardControl} from 'components/keyboard-control/KeyboardControl';
-import {ImmutableRefObject, useDepsEffect} from 'common/ReactUtil';
+import {ImmutableRefObject, useDepsEffect, useLatest} from 'common/ReactUtil';
 import {DropdownItemCheckbox} from 'components/dropdown/DropdownItemCheckbox';
 import {AppParameter, useAppParameter} from './useAppParameter';
 
@@ -44,31 +44,35 @@ export function useAppStore(): {
     const preventCloseCounterRef = useRef(0);
     const [currentParams, setCurrentParams] = useState(defaultHashParams);
     useDepsEffect(() => {
-        const listener = () => setCurrentParams(getHashParams());
+        const listener = (): void => setCurrentParams(getHashParams());
         window.addEventListener('hashchange', listener);
         return () => window.removeEventListener('hashchange', listener);
     }, []);
     const appParameter = useAppParameter(emptyParams, currentParams, setCurrentParams);
 
-    const enterPreventClose = useCallback(() => (preventCloseCounterRef.current += 1), []);
-    const exitPreventClose = useCallback(() => (preventCloseCounterRef.current -= 1), []);
-    const indicateLoading: <T>(promise: Promise<T>) => Promise<T> = useAsyncCallback<unknown, [Promise<unknown>], any>(
-        (promise) => {
-            setIsLoading(true);
-            return promise;
-        },
-        identity,
-        alwaysThrow,
-        () => setIsLoading(false)
+    const enterPreventClose = (): void => void (preventCloseCounterRef.current += 1);
+    const exitPreventClose = (): void => void (preventCloseCounterRef.current -= 1);
+    const indicateLoadingRef: ImmutableRefObject<<T>(promise: Promise<T>) => Promise<T>> = useLatest(
+        useAsyncCallback<unknown, [Promise<unknown>], any>(
+            (promise) => {
+                setIsLoading(true);
+                return promise;
+            },
+            identity,
+            alwaysThrow,
+            () => setIsLoading(false)
+        )
     );
-    const preventClose: <T>(promise: Promise<T>) => Promise<T> = useAsyncCallback<unknown, [Promise<unknown>], any>(
-        (promise) => {
-            enterPreventClose();
-            return promise;
-        },
-        identity,
-        alwaysThrow,
-        exitPreventClose
+    const preventCloseRef: ImmutableRefObject<<T>(promise: Promise<T>) => Promise<T>> = useLatest(
+        useAsyncCallback<unknown, [Promise<unknown>], any>(
+            (promise) => {
+                enterPreventClose();
+                return promise;
+            },
+            identity,
+            alwaysThrow,
+            exitPreventClose
+        )
     );
 
     useDepsEffect(() => {
@@ -86,7 +90,7 @@ export function useAppStore(): {
 
     const keyDownListeners = useRef<((ev: KeyboardEvent) => boolean)[]>([]);
     useDepsEffect(() => {
-        const listener = (ev: KeyboardEvent) => {
+        const listener = (ev: KeyboardEvent): void => {
             const listeners = keyDownListeners.current;
             for (let index = listeners.length - 1; index >= 0; index--) {
                 if (listeners[index](ev)) {
@@ -99,7 +103,7 @@ export function useAppStore(): {
     }, []);
 
     return {
-        appStore: useMemo<AppStore>(
+        appStore: useMemo(
             () => ({
                 appParameter,
                 confirm: (body, header) =>
@@ -117,14 +121,14 @@ export function useAppStore(): {
                 setCurrentParams,
                 enterPreventClose,
                 exitPreventClose,
-                indicateLoading,
+                indicateLoading: (...args) => indicateLoadingRef.current(...args),
                 setKeyboardControl,
                 keyDownListeners: {
-                    add: (listener: (ev: KeyboardEvent) => boolean) => noop(keyDownListeners.current.push(listener)),
-                    remove: (listener: (ev: KeyboardEvent) => boolean) => noop(arrayRemoveInPlace(keyDownListeners.current, listener)),
+                    add: (listener: (ev: KeyboardEvent) => boolean): void => void keyDownListeners.current.push(listener),
+                    remove: (listener: (ev: KeyboardEvent) => boolean): void => void arrayRemoveInPlace(keyDownListeners.current, listener),
                 },
                 modalContainerRef,
-                preventClose,
+                preventClose: (...args) => preventCloseRef.current(...args),
                 spellCheckDropdownItem: (
                     <DropdownItemCheckbox checked={appParameter.values.spellCheck} setChecked={appParameter.setSpellCheck}>
                         Spell check
@@ -132,7 +136,7 @@ export function useAppStore(): {
                 ),
                 toast,
             }),
-            [appParameter, currentParams, enterPreventClose, exitPreventClose, indicateLoading, preventClose]
+            [appParameter, currentParams, indicateLoadingRef, preventCloseRef]
         ),
         isLoading,
         keyboardControl,
@@ -143,10 +147,10 @@ export function useAppStore(): {
 function OkButton({closeModal, resolve}: {readonly closeModal: () => void; readonly resolve: (value: boolean) => void}): JSX.Element {
     return (
         <Button
-            onClick={useCallback(() => {
+            onClick={(): void => {
                 resolve(true);
                 closeModal();
-            }, [closeModal, resolve])}
+            }}
         >
             Ok
         </Button>

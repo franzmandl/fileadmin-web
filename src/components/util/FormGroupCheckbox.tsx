@@ -1,4 +1,4 @@
-import React, {Dispatch, ReactNode, useCallback} from 'react';
+import {Dispatch, ReactNode} from 'react';
 import {FormGroup, Input} from 'reactstrap';
 
 export function FormGroupCheckbox({
@@ -15,12 +15,7 @@ export function FormGroupCheckbox({
     return (
         <label>
             <FormGroup check>
-                <Input
-                    checked={checked}
-                    disabled={disabled}
-                    onChange={useCallback((ev: React.ChangeEvent<HTMLInputElement>) => setChecked(ev.target.checked), [setChecked])}
-                    type='checkbox'
-                />
+                <Input checked={checked} disabled={disabled} onChange={(ev): void => setChecked(ev.target.checked)} type='checkbox' />
                 {children}
             </FormGroup>
         </label>

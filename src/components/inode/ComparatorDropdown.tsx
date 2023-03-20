@@ -1,6 +1,6 @@
 import {Comparator} from 'common/Comparator';
 import {focusNothing} from 'common/ReactUtil';
-import {Dispatch, useCallback} from 'react';
+import {Dispatch} from 'react';
 import {DropdownItem, DropdownMenu, DropdownToggle, UncontrolledDropdown} from 'reactstrap';
 import {DropdownItemCheckbox} from 'components/dropdown/DropdownItemCheckbox';
 import {SetSortAlphabeticalAndAscending} from 'pages/useDirectoryPageParameter';
@@ -22,37 +22,23 @@ export function ComparatorDropdown({
     readonly setSortSpecialFirst: Dispatch<boolean>;
     readonly hidden?: boolean;
 }): JSX.Element {
-    const isActive = useCallback(
-        (alphabetical: boolean, ascending: boolean) => alphabetical === sortAlphabetical && ascending === sortAscending,
-        [sortAlphabetical, sortAscending]
-    );
+    const isActive = (alphabetical: boolean, ascending: boolean): boolean =>
+        alphabetical === sortAlphabetical && ascending === sortAscending;
 
     return (
         <UncontrolledDropdown direction='start' className={className} hidden={hidden}>
             <DropdownToggle className={createSortClassName(sortAlphabetical, sortAscending)} onClick={focusNothing} />
             <DropdownMenu container='body' dark>
-                <DropdownItem
-                    active={isActive(true, true)}
-                    onClick={useCallback(() => setSortAlphabeticalAndAscending(true, true), [setSortAlphabeticalAndAscending])}
-                >
+                <DropdownItem active={isActive(true, true)} onClick={(): void => setSortAlphabeticalAndAscending(true, true)}>
                     <span className={createSortClassName(true, true)} /> By Title
                 </DropdownItem>
-                <DropdownItem
-                    active={isActive(true, false)}
-                    onClick={useCallback(() => setSortAlphabeticalAndAscending(true, false), [setSortAlphabeticalAndAscending])}
-                >
+                <DropdownItem active={isActive(true, false)} onClick={(): void => setSortAlphabeticalAndAscending(true, false)}>
                     <span className={createSortClassName(true, false)} /> By Title
                 </DropdownItem>
-                <DropdownItem
-                    active={isActive(false, true)}
-                    onClick={useCallback(() => setSortAlphabeticalAndAscending(false, true), [setSortAlphabeticalAndAscending])}
-                >
+                <DropdownItem active={isActive(false, true)} onClick={(): void => setSortAlphabeticalAndAscending(false, true)}>
                     <span className={createSortClassName(false, true)} /> By Date
                 </DropdownItem>
-                <DropdownItem
-                    active={isActive(false, false)}
-                    onClick={useCallback(() => setSortAlphabeticalAndAscending(false, false), [setSortAlphabeticalAndAscending])}
-                >
+                <DropdownItem active={isActive(false, false)} onClick={(): void => setSortAlphabeticalAndAscending(false, false)}>
                     <span className={createSortClassName(false, false)} /> By Date
                 </DropdownItem>
                 <DropdownItem divider />

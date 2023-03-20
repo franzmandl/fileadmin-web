@@ -3,7 +3,7 @@ import {useAsyncCallback} from 'common/useAsyncCallback';
 import {useCopyToClipboard} from 'components/util/useCopyToClipboard';
 import {Inode} from 'model/Inode';
 import {Share} from 'model/Share';
-import React, {useCallback, useState} from 'react';
+import {useState} from 'react';
 import {Button, FormGroup, Input, Label, Modal, ModalBody, ModalHeader} from 'reactstrap';
 import {AppContext} from 'stores/AppContext';
 
@@ -32,11 +32,7 @@ export function ShareModal({
             <ModalBody>
                 <FormGroup>
                     <Label>Days</Label>
-                    <Input
-                        type='number'
-                        value={days}
-                        onChange={useCallback((ev: React.ChangeEvent<HTMLInputElement>) => setDays(ev.target.valueAsNumber), [])}
-                    />
+                    <Input type='number' value={days} onChange={(ev): void => setDays(ev.target.valueAsNumber)} />
                 </FormGroup>
                 <Button onClick={generate} block>
                     Generate URLs
@@ -71,13 +67,7 @@ function ShareComponent({
                 hidden={!navigator.share}
                 className='mdi mdi-share-variant'
                 color='primary'
-                onClick={useCallback(
-                    () =>
-                        navigator.share({
-                            url,
-                        }),
-                    [url]
-                )}
+                onClick={(): Promise<void> => navigator.share({url})}
             />
             <Button
                 hidden={!navigator.clipboard}

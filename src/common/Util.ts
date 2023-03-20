@@ -122,7 +122,7 @@ export function formatTimestamp(timestamp: Date | number | null, precision: Time
     const date = new Date(timestamp);
     const stringBuilder = [String(date.getFullYear())];
 
-    function pushTwoDigits(prefix: string, value: number) {
+    function pushTwoDigits(prefix: string, value: number): void {
         stringBuilder.push(prefix);
         if (value < 10) {
             stringBuilder.push('0');
@@ -206,7 +206,7 @@ export function arrayRemoveInPlace<T>(array: T[], value: T): T[] {
 }
 
 // Taken from https://stackoverflow.com/questions/4467539/javascript-modulo-gives-a-negative-result-for-negative-numbers
-export function mod(n: number, m: number) {
+export function mod(n: number, m: number): number {
     return ((n % m) + m) % m;
 }
 
@@ -220,7 +220,14 @@ export function identity<T>(value: T): T {
 
 export const noop: (..._: ReadonlyArray<unknown>) => void = () => undefined;
 
-export function wait(ms: number) {
+/**
+ * Inspired by https://stackoverflow.com/questions/39419170/how-do-i-check-that-a-switch-block-is-exhaustive-in-typescript
+ */
+export function assertUnreachable(...cause: never): never {
+    throw new Error('Impossible state', {cause});
+}
+
+export function wait(ms: number): Promise<void> {
     return new Promise((resolve) => {
         setTimeout(resolve, ms);
     });
@@ -241,7 +248,7 @@ export function appendParam(params: URLSearchParams, name: string, value: string
     return params;
 }
 
-export function setOrDeleteParam(params: URLSearchParams, condition: boolean, name: string, value: string) {
+export function setOrDeleteParam(params: URLSearchParams, condition: boolean, name: string, value: string): void {
     if (condition) {
         params.set(name, value);
     } else {
@@ -253,12 +260,12 @@ export function paramsToHash(params: URLSearchParams): string {
     return '#' + params.toString().replaceAll('%2F', separator);
 }
 
-export function pushHash(params: URLSearchParams) {
+export function pushHash(params: URLSearchParams): URLSearchParams {
     window.history.pushState(null, '', paramsToHash(params)); // Does not fire hashchange-event.
     return params;
 }
 
-export function replaceHash(params: URLSearchParams) {
+export function replaceHash(params: URLSearchParams): URLSearchParams {
     window.history.replaceState(null, '', paramsToHash(params)); // Does not fire hashchange-event.
     return params;
 }

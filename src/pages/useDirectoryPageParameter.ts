@@ -33,12 +33,13 @@ export interface DirectoryPageParameter {
     readonly previousPath: string | undefined;
     readonly values: DirectoryPageParameterValues;
     readonly getEncodedPath: (path: string) => URLSearchParams;
+    readonly pushPath: Dispatch<string>;
+    readonly replacePath: Dispatch<string>;
     readonly setAction: Dispatch<Action>;
     readonly setDecentDirectory: Dispatch<boolean>;
     readonly setDecentFile: Dispatch<boolean>;
     readonly setDecentReadmeFile: Dispatch<boolean>;
     readonly setDecentRunLastFile: Dispatch<boolean>;
-    readonly setPath: Dispatch<string>;
     readonly setShowHidden: Dispatch<boolean>;
     readonly setShowLastModified: Dispatch<boolean>;
     readonly setShowMimeType: Dispatch<boolean>;
@@ -68,21 +69,22 @@ export function useDirectoryPageParameter(
             previousPathRef.current = previousPath;
         }
         previousValuesRef.current = values;
-        const push = (partialValues: Partial<DirectoryPageParameterValues>) =>
+        const push = (partialValues: Partial<DirectoryPageParameterValues>): void =>
             setCurrentParams((prevParams) => pushHash(encodeValues(prevParams, {...values, ...partialValues})));
-        const replace = (partialValues: Partial<DirectoryPageParameterValues>) =>
+        const replace = (partialValues: Partial<DirectoryPageParameterValues>): void =>
             setCurrentParams((prevParams) => replaceHash(encodeValues(prevParams, {...values, ...partialValues})));
         return {
             encoded: encodeValues(parentParams, values),
             values,
             previousPath: previousPathRef.current,
             getEncodedPath: (path: string) => encodeValues(parentParams, {...values, path}),
+            pushPath: (path: string) => push({path}),
+            replacePath: (path: string) => replace({path}),
             setAction: (action: Action) => replace({action}),
             setDecentDirectory: (decentDirectory: boolean) => replace({decentDirectory}),
             setDecentFile: (decentFile: boolean) => replace({decentFile}),
             setDecentReadmeFile: (decentReadmeFile: boolean) => replace({decentReadmeFile}),
             setDecentRunLastFile: (decentRunLastFile: boolean) => replace({decentRunLastFile}),
-            setPath: (path: string) => push({path}),
             setShowHidden: (showHidden: boolean) => replace({showHidden}),
             setShowLastModified: (showLastModified: boolean) => replace({showLastModified}),
             setShowMimeType: (showMimeType: boolean) => replace({showMimeType}),

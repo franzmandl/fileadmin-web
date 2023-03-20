@@ -1,4 +1,4 @@
-import React, {Dispatch, Fragment, ReactNode, useCallback, useMemo, useRef, useState} from 'react';
+import React, {Dispatch, Fragment, ReactNode, useRef, useState} from 'react';
 import {Badge, Button, Dropdown, DropdownItem, DropdownMenu, DropdownToggle} from 'reactstrap';
 import {Inode, formatSize, isReadmeFile, getDownloadPath} from 'model/Inode';
 import {
@@ -14,6 +14,7 @@ import {
     separator,
     paramsToHash,
     appendParam,
+    resolvePath,
 } from 'common/Util';
 import {FileComponent} from 'components/file/FileComponent';
 import {DirectoryComponent} from 'components/inode/DirectoryComponent';
@@ -26,30 +27,22 @@ import {CheckboxInput} from 'components/file/CheckboxInput';
 import {TriggerableAction} from 'common/TriggerableAction';
 import {DirectoryPageContext} from 'pages/DirectoryPageContext';
 import {ShareModal} from './ShareModal';
-import {UploadDropdownItem} from './UploadDropdownItem';
+import {UploadComponent} from './UploadComponent';
 import {useAsyncCallback} from 'common/useAsyncCallback';
 import './InodeComponent.scss';
 import classNames from 'classnames';
 import {useCopyToClipboard} from 'components/util/useCopyToClipboard';
 import {RenderIfVisible} from 'components/util/RenderIfVisible';
+import {useMove} from './useMove';
 
 export interface InodeMeta {
     readonly showContent: boolean;
 }
 
-export interface InodeComponentProps {
-    readonly context: DirectoryPageContext;
-    readonly decentDirectory: boolean;
-    readonly inode: Inode;
-    readonly isFirstLevel: boolean;
-    readonly meta: InodeMeta;
-    readonly nameCursorPosition: number;
-    readonly parentPath: string;
-}
-
 export function InodeComponent({
     context,
     decentDirectory,
+    filterHighlightTags,
     handleAddAction,
     inode,
     setInode,
@@ -61,17 +54,22 @@ export function InodeComponent({
     openGallery,
     parentPath,
 }: {
+    readonly context: DirectoryPageContext;
+    readonly decentDirectory: boolean;
+    readonly filterHighlightTags: ReadonlySet<string> | null;
     readonly handleAddAction: (handled: () => void) => void;
+    readonly inode: Inode;
     readonly setInode: (newInode: Inode) => void;
+    readonly isFirstLevel: boolean;
+    readonly meta: InodeMeta;
+    readonly nameCursorPosition: number;
     readonly onDelete: () => void;
     readonly onMove: (newInode: Inode) => void;
     readonly openGallery: () => void;
-} & InodeComponentProps): JSX.Element {
-    const {
-        appContext: {appStore, audioPlayerStore, consoleStore, inodeStore, suggestionStore},
-        dropdownContainerRef,
-        directoryPageParameter,
-    } = context;
+    readonly parentPath: string;
+}): JSX.Element {
+    const {appContext, dropdownContainerRef, directoryPageParameter} = context;
+    const {appStore, audioPlayerStore, consoleStore, inodeStore, suggestionStore} = appContext;
     const {
         action,
         decentFile,
@@ -89,7 +87,7 @@ export function InodeComponent({
     } = directoryPageParameter.values;
     const encodedPath = encodePath(inode.path);
 
-    const isVisible = useMemo((): boolean => {
+    const isVisible = ((): boolean => {
         let result = true;
         if (result && !showHidden) {
             result = !inode.name.startsWith('.');
@@ -103,9 +101,9 @@ export function InodeComponent({
             }
         }
         return result;
-    }, [inode.name, inode.task, showNotRepeating, showHidden, showUnavailable, showWaiting, today]);
+    })();
 
-    const smallInfo = useMemo((): string => {
+    const smallInfo = ((): string => {
         const partsInode = inode.parentPath.split(separator);
         const parts = parentPath.split(separator);
         let index = 0;
@@ -114,7 +112,7 @@ export function InodeComponent({
         }
         partsInode.splice(0, index);
         return breakSpecialCharacters(trimAfterWildcard(partsInode.join(separator), parentPath));
-    }, [inode.parentPath, parentPath]);
+    })();
 
     const delete_ = useAsyncCallback<boolean, [], void>(
         () =>
@@ -132,12 +130,37 @@ export function InodeComponent({
         consoleStore.handleError
     );
 
-    const move = useAsyncCallback(
-        (relativeDestination: string) => appStore.indicateLoading(appStore.preventClose(inodeStore.move(inode, relativeDestination))),
-        (newInode, _, onSuccess?: () => void) => {
-            onMove(newInode);
-            onSuccess?.();
-        },
+    const move = useMove({context: appContext, inode, onMove});
+
+    const toDirectory = useAsyncCallback<boolean, [], void>(
+        () =>
+            appStore.confirm(
+                <>
+                    Convert inode to directory: <pre className='overflow-auto'>{inode.name}</pre>
+                </>
+            ),
+        (value) => (value ? toDirectoryImmediately() : undefined),
+        consoleStore.handleError
+    );
+    const toDirectoryImmediately = useAsyncCallback(
+        () => appStore.indicateLoading(appStore.preventClose(inodeStore.toDirectory(inode.path))),
+        setInode,
+        consoleStore.handleError
+    );
+
+    const toFile = useAsyncCallback<boolean, [], void>(
+        () =>
+            appStore.confirm(
+                <>
+                    Convert inode to file: <pre className='overflow-auto'>{inode.name}</pre>
+                </>
+            ),
+        (value) => (value ? toFileImmediately() : undefined),
+        consoleStore.handleError
+    );
+    const toFileImmediately = useAsyncCallback(
+        () => appStore.indicateLoading(appStore.preventClose(inodeStore.toFile(inode.path))),
+        setInode,
         consoleStore.handleError
     );
 
@@ -168,83 +191,64 @@ export function InodeComponent({
                         checkShowContentSize(inode) &&
                         checkShowContentType(inode))
             ),
-        [decentDirectory, decentFile, decentRunLastFile, decentReadmeFile]
+        [decentDirectory, decentFile] // decentReadmeFile and decentRunLastFile only affect the future.
     );
 
-    const setShowContentFalse = useCallback(() => setShowContentDangerous(false), []);
+    const setShowContentFalse = (): void => setShowContentDangerous(false);
     const asyncSetShowContentTrue = useAsyncCallback(
         () => (showContent ? false : checkShowContent()),
         (value) => (value ? setShowContentDangerous(true) : undefined),
         consoleStore.handleError
     );
 
-    const asyncToggleShowContent = useCallback(
-        (): Promise<void> => (showContent ? Promise.resolve(setShowContentFalse()) : asyncSetShowContentTrue()),
-        [asyncSetShowContentTrue, setShowContentFalse, showContent]
-    );
+    const asyncToggleShowContent = (): Promise<void> => (showContent ? Promise.resolve(setShowContentFalse()) : asyncSetShowContentTrue());
 
     const [isEdit, setIsEdit] = useState<boolean>(false);
     useDepsEffect(() => setIsEdit((prev) => action === Action.edit && prev), [action]);
 
     const loadInode = useAsyncCallback(() => appStore.indicateLoading(inodeStore.getInode(inode.path)), setInode, consoleStore.handleError);
-    const handleAction = useCallback(
-        (ev: React.MouseEvent) => {
-            if (action === Action.view && inode.canAnyGet) {
-                if (inode.isFile) {
-                    if (isAnyType(inode.type, Type.audio)) {
-                        audioPlayerStore.enqueue(inode);
-                    } else if (isAnyType(inode.type, Type.image)) {
-                        openGallery();
-                    } else if (isAnyType(inode.type, Type.media, Type.pdf)) {
-                        window.open(getDownloadPath(inode, encodedPath), '_blank');
-                    } else {
-                        asyncToggleShowContent();
-                    }
+    const handleAction = (ev: React.MouseEvent): void => {
+        if (action === Action.view && inode.canAnyGet) {
+            if (inode.isFile) {
+                if (isAnyType(inode.type, Type.audio)) {
+                    audioPlayerStore.enqueue(inode);
+                } else if (isAnyType(inode.type, Type.image)) {
+                    openGallery();
+                } else if (isAnyType(inode.type, Type.media, Type.pdf)) {
+                    window.open(getDownloadPath(inode, encodedPath), '_blank');
                 } else {
                     asyncToggleShowContent();
                 }
-                ev.stopPropagation();
-            } else if (action === Action.edit && inode.operation.canInodeRename) {
-                if (isEdit) {
-                    setIsEdit(false);
-                } else {
-                    setIsEdit(true);
-                    setNewNameCursorPosition(nameCursorPosition);
-                }
-                ev.stopPropagation();
-            } else if (action === Action.reload) {
-                if (showContent) {
-                    contentRef.current?.triggerAction(Action.reload, () => ev.stopPropagation());
-                } else {
-                    loadInode();
-                    ev.stopPropagation();
-                }
-            } else if (action === Action.add && inode.canAnyAdd) {
-                if (showContent) {
-                    contentRef.current?.triggerAction(Action.add, () => ev.stopPropagation());
-                } else {
-                    handleAddAction(() => ev.stopPropagation());
-                }
-            } else if (action === Action.delete && inode.operation.canInodeDelete) {
-                delete_();
+            } else {
+                asyncToggleShowContent();
+            }
+            ev.stopPropagation();
+        } else if (action === Action.edit && inode.operation.canInodeRename) {
+            if (isEdit) {
+                setIsEdit(false);
+            } else {
+                setIsEdit(true);
+                setNewNameCursorPosition(nameCursorPosition);
+            }
+            ev.stopPropagation();
+        } else if (action === Action.reload) {
+            if (showContent) {
+                contentRef.current?.triggerAction(Action.reload, () => ev.stopPropagation());
+            } else {
+                loadInode();
                 ev.stopPropagation();
             }
-        },
-        [
-            action,
-            inode,
-            audioPlayerStore,
-            openGallery,
-            encodedPath,
-            asyncToggleShowContent,
-            isEdit,
-            nameCursorPosition,
-            showContent,
-            loadInode,
-            handleAddAction,
-            delete_,
-        ]
-    );
+        } else if (action === Action.add && inode.canAnyAdd) {
+            if (showContent) {
+                contentRef.current?.triggerAction(Action.add, () => ev.stopPropagation());
+            } else {
+                handleAddAction(() => ev.stopPropagation());
+            }
+        } else if (action === Action.delete && inode.operation.canInodeDelete) {
+            delete_();
+            ev.stopPropagation();
+        }
+    };
 
     const [newName, setNewName] = useState<string>(inode.name);
     useDepsEffect(() => setNewName(inode.name), [inode.name]);
@@ -252,12 +256,12 @@ export function InodeComponent({
     // See AddInodeComponent why a layout effect is required.
     useDepsLayoutEffect(() => setNewNameCursorPosition(nameCursorPosition), [nameCursorPosition]);
 
-    const moveToNewName = useCallback(() => {
+    const moveToNewName = (): void => {
         if (newName !== inode.name) {
             move(newName);
         }
         setIsEdit(false);
-    }, [inode.name, move, newName]);
+    };
 
     const doneRunLast = useAsyncCallback(
         () =>
@@ -278,22 +282,26 @@ export function InodeComponent({
 
     const contentRef = useRef<TriggerableAction>(null);
     const [showShareModal, setShowShareModal] = useState<boolean>(false);
-    const toggleShowShareModal = useCallback(() => setShowShareModal((prev) => !prev), []);
+    const toggleShowShareModal = (): void => setShowShareModal((prev) => !prev);
 
     const [showDropdown, setShowDropdown] = useState<boolean>(false);
-    const toggleShowDropdown = useCallback(() => setShowDropdown((prev) => !prev), []);
+    const toggleShowDropdown = (): void => setShowDropdown((prev) => !prev);
+    const setShowDropdownFalse = (): void => setShowDropdown(false);
 
-    const setInodeAndCloseContent = useCallback(
-        (newInode: Inode) => {
-            setInode(newInode);
-            setShowContentFalse();
-        },
-        [setInode, setShowContentFalse]
-    );
+    const setInodeAndCloseContent = (newInode: Inode): void => {
+        setInode(newInode);
+        setShowContentFalse();
+    };
 
     const href = paramsToHash(directoryPageParameter.getEncodedPath(inode.path));
-    const suggestionControl = useMemo(() => suggestionStore.createSuggestionControl(inode.path), [inode.path, suggestionStore]);
+    const suggestionControl = suggestionStore.createSuggestionControl(inode.path);
     const thumbnailIntersectionRef = useRef<HTMLDivElement>(null);
+    const lineContext: LineContext = {
+        disabled: action !== Action.view,
+        filterHighlightTags: inode.filterHighlightTagSet ?? filterHighlightTags ?? new Set(),
+        filterOutputPath: inode.filterOutputPath,
+        getClientUrl: (path: string): string => paramsToHash(directoryPageParameter.getEncodedPath(path)),
+    };
 
     const nameClassName = !inode.canAnyGet ? 'text-muted' : '';
     return (
@@ -333,9 +341,9 @@ export function InodeComponent({
                     />
                 )}
                 {inode.friendlyName !== null ? (
-                    <i className={nameClassName}>{parseTags(inode.friendlyName)}</i>
+                    <i className={nameClassName}>{parseTags(inode.friendlyName, lineContext)}</i>
                 ) : (
-                    <span className={nameClassName}>{parseCheckbox(inode.name, move, action !== Action.view)}</span>
+                    <span className={nameClassName}>{parseCheckbox(inode.name, move, lineContext)}</span>
                 )}
                 {zeroWidthSpace}
                 <small className='text-muted m-1'>{smallInfo}</small>
@@ -350,57 +358,121 @@ export function InodeComponent({
                 >
                     <DropdownToggle className='mdi mdi-dots-vertical' onClick={focusNothing} />
                     <DropdownMenu container={dropdownContainerRef} dark>
-                        <DropdownItem
-                            disabled={!inode.operation.canFileSet}
-                            hidden={!inode.isFile}
-                            href={paramsToHash(
-                                appendParam(appStore.appParameter.getEncodedLocation(AppLocation.edit), ParamName.path, inode.path)
+                        <div className='inode-component-dropdown-buttons'>
+                            <button
+                                className='mdi mdi-cursor-text btn inode-component-dropdown-button'
+                                disabled={!inode.operation.canInodeRename}
+                                onClick={(): void => {
+                                    setIsEdit(true);
+                                    setShowDropdownFalse();
+                                }}
+                            />
+                            <button
+                                className='mdi mdi-share-variant btn inode-component-dropdown-button'
+                                disabled={!inode.operation.canInodeShare}
+                                onClick={(): void => {
+                                    setShowShareModal(true);
+                                    setShowDropdownFalse();
+                                }}
+                            />
+                            <button
+                                className='mdi mdi-trash-can btn inode-component-dropdown-button'
+                                disabled={!inode.operation.canInodeDelete}
+                                onClick={(): void => {
+                                    delete_();
+                                    setShowDropdownFalse();
+                                }}
+                            />
+                            <a
+                                className={classNames(
+                                    'mdi mdi-arrow-expand-all btn inode-component-dropdown-button',
+                                    !inode.operation.canFileGet ? 'disabled' : ''
+                                )}
+                                href={href}
+                                target='_blank'
+                                rel='noreferrer'
+                                role='button'
+                                title={inode.path}
+                                onClick={setShowDropdownFalse}
+                            />
+                            {inode.operation.canInodeToDirectory && (
+                                <button
+                                    className='mdi mdi-folder btn inode-component-dropdown-button'
+                                    color='secondary'
+                                    onClick={(): void => {
+                                        toDirectory();
+                                        setShowDropdownFalse();
+                                    }}
+                                />
                             )}
-                            target='_blank'
-                            rel='noreferrer'
-                        >
-                            <span className='mdi mdi-pencil' /> Edit
-                        </DropdownItem>
-                        <DropdownItem disabled={!inode.operation.canFileGet} href={href} title={inode.path}>
-                            <span className='mdi mdi-arrow-expand-all' /> Go to
-                        </DropdownItem>
-                        <DropdownItem
-                            disabled={!inode.operation.canFileGet}
-                            hidden={!inode.isFile}
-                            href={getDownloadPath(inode, encodedPath)}
-                            target='_blank'
-                            rel='noreferrer'
-                        >
-                            <span className='mdi mdi-download' /> Download
-                        </DropdownItem>
+                            {inode.operation.canInodeToFile && (
+                                <button
+                                    className='mdi mdi-file btn inode-component-dropdown-button'
+                                    color='secondary'
+                                    onClick={(): void => {
+                                        toFile();
+                                        setShowDropdownFalse();
+                                    }}
+                                />
+                            )}
+                            {inode.isFile && (
+                                <>
+                                    <a
+                                        className={classNames(
+                                            'mdi mdi-square-edit-outline btn inode-component-dropdown-button',
+                                            !inode.operation.canFileSet ? 'disabled' : ''
+                                        )}
+                                        href={paramsToHash(
+                                            appendParam(
+                                                appStore.appParameter.getEncodedLocation(AppLocation.edit),
+                                                ParamName.path,
+                                                inode.path
+                                            )
+                                        )}
+                                        target='_blank'
+                                        rel='noreferrer'
+                                        role='button'
+                                        onClick={setShowDropdownFalse}
+                                    />
+                                    <a
+                                        className={classNames(
+                                            'mdi mdi-download btn inode-component-dropdown-button',
+                                            !inode.operation.canFileGet ? 'disabled' : ''
+                                        )}
+                                        href={getDownloadPath(inode, encodedPath)}
+                                        target='_blank'
+                                        rel='noreferrer'
+                                        onClick={setShowDropdownFalse}
+                                    />
+                                    <UploadComponent
+                                        className='mdi mdi-upload btn inode-component-dropdown-button'
+                                        context={context.appContext}
+                                        inode={inode}
+                                        setInode={setInodeAndCloseContent}
+                                        setShowDropdown={setShowDropdown}
+                                    />
+                                    <UploadComponent
+                                        accept='image/*;capture=camera'
+                                        className='mdi mdi-camera btn inode-component-dropdown-button'
+                                        context={context.appContext}
+                                        inode={inode}
+                                        setInode={setInodeAndCloseContent}
+                                        setShowDropdown={setShowDropdown}
+                                    />
+                                </>
+                            )}
+                        </div>
                         <DropdownItem
                             hidden={!(navigator.clipboard && inode.parentLocalPath)}
                             onClick={useCopyToClipboard(appStore, consoleStore, inode.parentLocalPath ?? '')}
                         >
-                            <span className='mdi mdi-content-copy' /> Copy local path
+                            <span className='mdi mdi-content-copy' /> Directory
                         </DropdownItem>
-                        <UploadDropdownItem
-                            context={context.appContext}
-                            inode={inode}
-                            setInode={setInodeAndCloseContent}
-                            setShowDropdown={setShowDropdown}
+                        <DropdownItem
+                            hidden={!(navigator.clipboard && inode.localPath)}
+                            onClick={useCopyToClipboard(appStore, consoleStore, inode.localPath ?? '')}
                         >
-                            <span className='mdi mdi-upload' /> Upload
-                        </UploadDropdownItem>
-                        <UploadDropdownItem
-                            accept='image/*;capture=camera'
-                            context={context.appContext}
-                            inode={inode}
-                            setInode={setInodeAndCloseContent}
-                            setShowDropdown={setShowDropdown}
-                        >
-                            <span className='mdi mdi-camera' /> Photo
-                        </UploadDropdownItem>
-                        <DropdownItem disabled={!inode.operation.canInodeShare} onClick={useCallback(() => setShowShareModal(true), [])}>
-                            <span className='mdi mdi-share-variant' /> Share
-                        </DropdownItem>
-                        <DropdownItem disabled={!inode.operation.canInodeDelete} onClick={delete_}>
-                            <span className='mdi mdi-trash-can' /> Delete
+                            <span className='mdi mdi-content-copy' /> Path
                         </DropdownItem>
                         {inode.link !== null && (
                             <DropdownItem
@@ -420,14 +492,11 @@ export function InodeComponent({
                     hidden={!(inode.isRunLast && inode.isFile)}
                     className='float-end m-1'
                     color='success'
-                    onClick={useCallback(
-                        (ev: React.MouseEvent) => {
-                            ev.stopPropagation();
-                            focusNothing();
-                            doneRunLast();
-                        },
-                        [doneRunLast]
-                    )}
+                    onClick={(ev): void => {
+                        ev.stopPropagation();
+                        focusNothing();
+                        doneRunLast();
+                    }}
                 >
                     Done
                 </Button>
@@ -458,6 +527,7 @@ export function InodeComponent({
                             ref={contentRef}
                             action={action}
                             context={context}
+                            filterHighlightTags={inode.filterHighlightTagSet ?? filterHighlightTags ?? new Set()}
                             inode={inode}
                             setInode={setInode}
                             suggestionControl={suggestionControl}
@@ -468,9 +538,11 @@ export function InodeComponent({
                             className='inode-component-indent'
                             context={context}
                             decentDirectory={false} // Stops endless descending.
+                            filterHighlightTags={inode.filterHighlightTagSet ?? filterHighlightTags}
                             inode={inode}
                             setInode={setInode}
                             isFirstLevel={false}
+                            onMove={setInode}
                             path={inode.path}
                             suggestionControl={suggestionControl}
                         />
@@ -497,17 +569,24 @@ function getIconClassName(inode: Inode, showContent: boolean): string {
     }
 }
 
-function parseCheckbox(value: string, setValue: Dispatch<string>, disabled: boolean): ReactNode {
+interface LineContext {
+    readonly disabled: boolean;
+    readonly filterHighlightTags: ReadonlySet<string>;
+    readonly filterOutputPath: string | null;
+    readonly getClientUrl: (path: string) => string;
+}
+
+function parseCheckbox(value: string, setValue: Dispatch<string>, context: LineContext): ReactNode {
     const keySuffix = 'c';
     return value
         .split(/(\[[x ]\])/)
         .map((part, index, parts) =>
             index % 2 === 0 ? (
-                <Fragment key={`${index}${keySuffix}`}>{parseTags(part)}</Fragment>
+                <Fragment key={`${index}${keySuffix}`}>{parseTags(part, context)}</Fragment>
             ) : (
                 <CheckboxInput
                     key={`${index}${keySuffix}`}
-                    disabled={disabled}
+                    disabled={context.disabled}
                     onClick={stopPropagationAndFocusNothing}
                     checked={part[1] === 'x'}
                     parentIndex={index}
@@ -518,17 +597,35 @@ function parseCheckbox(value: string, setValue: Dispatch<string>, disabled: bool
         );
 }
 
-function parseTags(value: string): ReactNode {
-    const keySuffix = 't';
-    return value.split(tagRegexGrouped).map((part, index) =>
-        index % 2 === 0 ? (
-            <Fragment key={`${index}${keySuffix}`}>{breakSpecialCharacters(part)}</Fragment>
-        ) : (
-            <span key={`${index}${keySuffix}`} className='text-tag'>
-                {part}
-            </span>
-        )
-    );
+function parseTags(value: string, context: LineContext): ReactNode {
+    const {filterOutputPath} = context;
+    if (filterOutputPath === null) {
+        return breakSpecialCharacters(value);
+    } else {
+        const keySuffix = 't';
+        return value.split(tagRegexGrouped).map((part, index, parts) =>
+            index % 4 === 0 ? (
+                <Fragment key={`${index}${keySuffix}`}>{breakSpecialCharacters(part)}</Fragment>
+            ) : (
+                index % 4 === 3 && (
+                    <Fragment key={`${index}${keySuffix}`}>
+                        {parts[index - 1]}
+                        <a
+                            href={context.getClientUrl(resolvePath(filterOutputPath, part))}
+                            target='_blank'
+                            rel='noreferrer'
+                            className={classNames(context.filterHighlightTags.has(part) ? 'link-warning' : 'link-tag', {
+                                disabled: context.disabled,
+                            })}
+                            onClick={stopPropagationAndFocusNothing}
+                        >
+                            {part}
+                        </a>
+                    </Fragment>
+                )
+            )
+        );
+    }
 }
 
 function checkShowContentSize(inode: Inode): boolean {

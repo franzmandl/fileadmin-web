@@ -1,7 +1,7 @@
 import {AxiosError} from 'axios';
 import {formatTimestamp, TimestampPrecision} from 'common/Util';
 import {ConsoleEntry, ConsoleEntryLevel} from 'components/console/ConsoleComponent';
-import {Dispatch, ReactNode, useCallback, useMemo, useState} from 'react';
+import {Dispatch, ReactNode, useMemo, useState} from 'react';
 import {DropdownItem} from 'reactstrap';
 
 export interface ConsoleStore {
@@ -19,49 +19,38 @@ export function useConsoleStore(): {
 } {
     const [consoleEntries, setConsoleEntries] = useState<ReadonlyArray<ConsoleEntry>>([]);
     const [showConsole, setShowConsole] = useState<boolean>(false);
-    const log = useCallback(
-        (level: ConsoleEntryLevel, node: ReactNode) => setConsoleEntries((prev) => [{id: prev.length, level, node}, ...prev]),
-        []
-    );
-    const logError = useCallback(
-        (content: ReactNode) => {
-            setShowConsole(true);
-            log(
-                ConsoleEntryLevel.error,
-                <div className='text-danger px-1'>
-                    {formatTimestamp(new Date(), TimestampPrecision.second, ':')} ERROR: {content}
-                </div>
-            );
-        },
-        [log]
-    );
-    const logWarning = useCallback(
-        (content: ReactNode) => {
-            setShowConsole(true);
-            log(
-                ConsoleEntryLevel.warning,
-                <div className='text-warning px-1'>
-                    {formatTimestamp(new Date(), TimestampPrecision.second, ':')} WARNING: {content}
-                </div>
-            );
-        },
-        [log]
-    );
-    const handleError = useCallback(
-        (error: unknown): void => {
-            console.warn(error);
-            logWarning(JSON.stringify(error));
-            const axiosError = error as AxiosError<string> | undefined;
-            const message = axiosError?.response?.data ?? axiosError?.response ?? axiosError;
-            const status = axiosError?.response?.status;
-            logError((status !== undefined ? `${status}: ` : '') + String(message));
-        },
-        [logError, logWarning]
-    );
-    const setShowConsoleTrue = useCallback(() => setShowConsole(true), []);
     return {
-        consoleStore: useMemo(
-            () => ({
+        consoleStore: useMemo(() => {
+            const log = (level: ConsoleEntryLevel, node: ReactNode): void =>
+                setConsoleEntries((prev) => [{id: prev.length, level, node}, ...prev]);
+            const logError = (content: ReactNode): void => {
+                setShowConsole(true);
+                log(
+                    ConsoleEntryLevel.error,
+                    <div className='text-danger px-1'>
+                        {formatTimestamp(new Date(), TimestampPrecision.second, ':')} ERROR: {content}
+                    </div>
+                );
+            };
+            const logWarning = (content: ReactNode): void => {
+                setShowConsole(true);
+                log(
+                    ConsoleEntryLevel.warning,
+                    <div className='text-warning px-1'>
+                        {formatTimestamp(new Date(), TimestampPrecision.second, ':')} WARNING: {content}
+                    </div>
+                );
+            };
+            const handleError = (error: unknown): void => {
+                console.warn(error);
+                logWarning(JSON.stringify(error));
+                const axiosError = error as AxiosError<string> | undefined;
+                const message = axiosError?.response?.data ?? axiosError?.response ?? axiosError;
+                const status = axiosError?.response?.status;
+                logError((status !== undefined ? `${status}: ` : '') + String(message));
+            };
+            const setShowConsoleTrue = (): void => setShowConsole(true);
+            return {
                 handleError,
                 logError,
                 logWarning,
@@ -70,9 +59,8 @@ export function useConsoleStore(): {
                         <span className='mdi mdi-code-tags' /> Show Console
                     </DropdownItem>
                 ),
-            }),
-            [handleError, logError, logWarning, setShowConsoleTrue]
-        ),
+            };
+        }, []),
         consoleEntries,
         setShowConsole,
         showConsole,

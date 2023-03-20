@@ -103,8 +103,9 @@ export const serverFormData = Object.freeze({
  */
 export const tagEndingRegex = /[\p{L}\d_]*/u;
 export const tagNameRegex = new RegExp('(?:\\p{L}+|\\d+[\\p{L}_])' + tagEndingRegex.source, 'u');
-export const tagRegex = new RegExp('#@?' + tagNameRegex.source, 'u');
-export const tagRegexGrouped = new RegExp('(' + tagRegex.source + ')', 'u');
+const tagNamePrefix = '#@?';
+export const tagRegex = new RegExp(tagNamePrefix + tagNameRegex.source, 'u');
+export const tagRegexGrouped = new RegExp('((' + tagNamePrefix + ')(' + tagNameRegex.source + '))', 'u');
 /*
  * URL regex adapted from https://www.ietf.org/rfc/rfc3986.txt https://urlregex.com/
  * Replaced group indicators "(" with non-capturing group indicator "(?:" see https://stackoverflow.com/questions/21419530/use-of-capture-groups-in-string-split

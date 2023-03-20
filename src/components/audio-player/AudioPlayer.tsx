@@ -2,7 +2,7 @@ import {getNextIndex, getPrevIndex} from 'common/HasLength';
 import {focusNothing, useDepsEffect} from 'common/ReactUtil';
 import {encodePath} from 'common/Util';
 import {getDownloadPath, Inode} from 'model/Inode';
-import {useCallback, useRef, useState} from 'react';
+import {useRef, useState} from 'react';
 import {Button, ButtonGroup} from 'reactstrap';
 import {AppContext} from 'stores/AppContext';
 import './AudioPlayer.scss';
@@ -24,69 +24,69 @@ export function AudioPlayer({
         appStore.enterPreventClose();
         return () => appStore.exitPreventClose();
     }, []);
-    const play = useCallback(() => {
+    const play = (): void => {
         ref.current?.play();
         setIsPlaying(true);
-    }, []);
-    const pause = useCallback(() => {
+    };
+    const pause = (): void => {
         ref.current?.pause();
         setIsPlaying(false);
-    }, []);
-    const stop = useCallback(() => {
+    };
+    const stop = (): void => {
         pause();
         if (ref.current !== null) {
             ref.current.currentTime = 0;
         }
-    }, [pause]);
-    const selectPrevSong = useCallback(() => {
+    };
+    const selectPrevSong = (): void => {
         setCurrentIndex(getPrevIndex(inodes, currentIndex));
-    }, [currentIndex, inodes]);
-    const selectNextSong = useCallback(() => {
+    };
+    const selectNextSong = (): void => {
         setCurrentIndex(getNextIndex(inodes, currentIndex));
-    }, [currentIndex, inodes]);
-    const onSongEnded = useCallback(() => {
+    };
+    const onSongEnded = (): void => {
         selectNextSong();
         if (isRepeat || currentIndex + 1 < inodes.length) {
             play();
         }
-    }, [currentIndex, inodes.length, isRepeat, play, selectNextSong]);
-    const shuffle = useCallback(() => {
+    };
+    const shuffle = (): void => {
         alert('Not implemented yet.');
-    }, []);
+    };
     return (
         <div className='audio-player'>
             <div className='audio-player-left'>
                 <Button
                     className={`m-1 mdi ${isPlaying ? 'mdi-pause' : 'mdi-play'}`}
                     size='lg'
-                    onClick={useCallback(() => {
+                    onClick={(): void => {
                         focusNothing();
                         isPlaying ? pause() : play();
-                    }, [isPlaying, pause, play])}
+                    }}
                 />
                 <ButtonGroup>
                     <Button
                         className='mdi mdi-skip-backward'
-                        onClick={useCallback(() => {
+                        onClick={(): void => {
                             focusNothing();
                             selectPrevSong();
                             play();
-                        }, [play, selectPrevSong])}
+                        }}
                     />
                     <Button
                         className='mdi mdi-stop'
-                        onClick={useCallback(() => {
+                        onClick={(): void => {
                             focusNothing();
                             stop();
-                        }, [stop])}
+                        }}
                     />
                     <Button
                         className='mdi mdi-skip-forward'
-                        onClick={useCallback(() => {
+                        onClick={(): void => {
                             focusNothing();
                             selectNextSong();
                             play();
-                        }, [selectNextSong, play])}
+                        }}
                     />
                 </ButtonGroup>
             </div>
@@ -98,8 +98,8 @@ export function AudioPlayer({
                     className='m-1'
                     controls
                     onEnded={onSongEnded}
-                    onPlay={useCallback(() => setIsPlaying(true), [])}
-                    onPause={useCallback(() => setIsPlaying(false), [])}
+                    onPlay={(): void => setIsPlaying(true)}
+                    onPause={(): void => setIsPlaying(false)}
                     src={getDownloadPath(currentInode, encodePath(currentInode.path))}
                 />
             </div>
@@ -108,25 +108,25 @@ export function AudioPlayer({
                     <Button
                         className='mdi mdi-repeat'
                         active={isRepeat}
-                        onClick={useCallback(() => {
+                        onClick={(): void => {
                             focusNothing();
                             setIsRepeat((prev) => !prev);
-                        }, [])}
+                        }}
                     />
                     <Button
                         className='mdi mdi-shuffle'
-                        onClick={useCallback(() => {
+                        onClick={(): void => {
                             focusNothing();
                             shuffle();
-                        }, [shuffle])}
+                        }}
                     />
                 </ButtonGroup>
                 <Button
                     className='m-1 mdi mdi-close'
-                    onClick={useCallback(() => {
+                    onClick={(): void => {
                         focusNothing();
                         audioPlayerStore.setAudioPlayerControl(undefined);
-                    }, [audioPlayerStore])}
+                    }}
                 />
             </div>
         </div>

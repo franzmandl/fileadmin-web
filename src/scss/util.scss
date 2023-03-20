@@ -1,9 +1,5 @@
 @import './variables.scss';
 
-.text-tag {
-    color: #9c9c9c;
-}
-
 .thumbnail {
     display: inline-block;
     height: $thumbnail-dimension;
@@ -21,9 +17,17 @@
     }
 }
 
-a.disabled {
+.disabled {
     pointer-events: none;
-    color: inherit;
+    color: inherit !important;
+}
+
+.link-tag {
+    color: #9c9c9c;
+
+    &:hover {
+        color: #888;
+    }
 }
 
 a.reboot {

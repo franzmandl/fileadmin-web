@@ -1,7 +1,7 @@
-import React, {Dispatch, ForwardedRef, forwardRef, Fragment, useCallback, useImperativeHandle, useRef, useState} from 'react';
+import {Dispatch, ForwardedRef, forwardRef, Fragment, useImperativeHandle, useRef, useState} from 'react';
 import {Inode} from 'model/Inode';
-import {alwaysThrow, getName, identity, isAnyType, Type} from 'common/Util';
-import {InodeComponent, InodeComponentProps, InodeMeta} from './InodeComponent';
+import {alwaysThrow, assertUnreachable, getName, identity, isAnyType, Type} from 'common/Util';
+import {InodeComponent, InodeMeta} from './InodeComponent';
 import {AddInodeComponent} from './AddInodeComponent';
 import {Action} from 'components/Action';
 import {Ided} from 'common/Ided';
@@ -15,6 +15,8 @@ import {DirectoryPageContext} from 'pages/DirectoryPageContext';
 import {useAsyncCallback} from 'common/useAsyncCallback';
 import {Directory} from 'model/Directory';
 import {SuggestionControl} from 'components/textarea/RichTextarea';
+import {MoveInodeComponent} from './MoveInodeComponent';
+import {useMove} from './useMove';
 
 export const DirectoryComponent = forwardRef(function DirectoryComponent(
     {
@@ -22,10 +24,12 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
         className,
         context,
         decentDirectory,
+        filterHighlightTags,
         inode,
         isFirstLevel,
         setInode,
         setIsReady,
+        onMove,
         path,
         suggestionControl,
     }: {
@@ -33,24 +37,24 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
         readonly className?: string;
         readonly context: DirectoryPageContext;
         readonly decentDirectory: boolean;
+        readonly filterHighlightTags: ReadonlySet<string> | null;
         readonly inode: Inode;
         readonly isFirstLevel: boolean;
         readonly setInode: Dispatch<Inode>;
         readonly setIsReady?: Dispatch<boolean>;
+        readonly onMove: (newInode: Inode) => void;
         readonly path: string;
         readonly suggestionControl: SuggestionControl;
     },
     ref: ForwardedRef<TriggerableAction>
 ): JSX.Element {
-    const {
-        comparator,
-        appContext: {appStore, authenticationStore, consoleStore, galleryStore, inodeStore},
-        directoryPageParameter,
-    } = context;
+    const {comparator, appContext, directoryPageParameter} = context;
+    const {appStore, authenticationStore, consoleStore, galleryStore, inodeStore} = appContext;
     const {action} = directoryPageParameter.values;
     const [addInodeAfterIndex, setAddInodeAfterIndex] = useState<number>();
     const [addInodeParent, setAddInodeParent] = useState<string>(path);
     const [idedInodes, setIdedInodes] = useState<ReadonlyArray<Ided<Inode, InodeMeta>>>([]);
+    const [isEdit, setIsEdit] = useState<boolean>(false);
     const inodeIdRef = useRef(0);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     useDepsEffect(() => {
@@ -60,33 +64,27 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
     }, [action]);
     const [directory, setDirectory] = useState<Directory>();
 
-    const onInodeChange = useCallback((data: Inode, meta: InodeMeta, id: string, index: number): void => {
+    const onInodeChange = (data: Inode, meta: InodeMeta, id: string, index: number): void => {
         setIdedInodes((prev) => arrayReplace(prev, index, {id, data, meta}));
-    }, []);
+    };
 
     const loadInode = useAsyncCallback(() => inodeStore.getInode(path), setInode, consoleStore.handleError);
 
-    const onInodeDelete = useCallback(
-        (oldInode: Inode, index: number): void => {
-            setIdedInodes(arrayRemove(idedInodes, index));
-            loadInode();
-        },
-        [idedInodes, loadInode]
-    );
+    const onInodeDelete = (oldInode: Inode, index: number): void => {
+        setIdedInodes(arrayRemove(idedInodes, index));
+        loadInode();
+    };
 
-    const onInodeMove = useCallback(
-        (newInode: Inode, oldInode: Inode, meta: InodeMeta, id: string, index: number): void => {
-            const nextIdedInodes = [...idedInodes];
-            if (newInode.parentPath === oldInode.parentPath) {
-                nextIdedInodes.splice(index, 1, {id, data: newInode, meta});
-            } else {
-                nextIdedInodes.splice(index, 1);
-            }
-            setIdedInodes(nextIdedInodes);
-            loadInode();
-        },
-        [idedInodes, loadInode]
-    );
+    const onInodeMove = (newInode: Inode, oldInode: Inode, meta: InodeMeta, id: string, index: number): void => {
+        const nextIdedInodes = [...idedInodes];
+        if (newInode.parentPath === oldInode.parentPath) {
+            nextIdedInodes.splice(index, 1, {id, data: newInode, meta});
+        } else {
+            nextIdedInodes.splice(index, 1);
+        }
+        setIdedInodes(nextIdedInodes);
+        loadInode();
+    };
 
     const add = useAsyncCallback<Inode, [NewInode, number], void>(
         (newInode) => appStore.indicateLoading(appStore.preventClose(inodeStore.add(addInodeParent, newInode))),
@@ -139,7 +137,7 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
     useDepsEffect(() => void load(), [path]);
     useConditionalEffect(idedInodes !== emptyIdedInodes, () => setIsReady?.(true));
 
-    const onGalleryEventRef = useLatest((ev: GalleryEvent) => {
+    const onGalleryEventRef = useLatest((ev: GalleryEvent): void => {
         const {_type, oldInode} = ev;
         const index = idedInodes.findIndex(({data}) => data === oldInode);
         if (index === -1) {
@@ -149,77 +147,72 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
         switch (_type) {
             case 'delete': {
                 onInodeDelete(oldInode, index);
-                break;
+                return;
             }
             case 'move': {
                 const {newInode} = ev;
                 const {id, meta} = idedInodes[index];
                 onInodeMove(newInode, oldInode, meta, id, index);
-                break;
+                return;
             }
         }
+        return assertUnreachable(_type);
     });
 
-    const openGallery = useCallback(
-        (inodeIndex: number) => {
-            let imageIndex = 0;
-            const images: Inode[] = [];
-            idedInodes.forEach((idedInode, index) => {
-                if (isAnyType(idedInode.data.type, Type.image)) {
-                    if (index === inodeIndex) {
-                        imageIndex = images.length;
-                    }
-                    images.push(idedInode.data);
+    const openGallery = (inodeIndex: number): void => {
+        let imageIndex = 0;
+        const images: Inode[] = [];
+        idedInodes.forEach((idedInode, index) => {
+            if (isAnyType(idedInode.data.type, Type.image)) {
+                if (index === inodeIndex) {
+                    imageIndex = images.length;
                 }
-            });
-            galleryStore.setGalleryControl({
-                index: imageIndex,
-                inodes: images,
-                onEvent: (ev) => onGalleryEventRef.current(ev),
-            });
-        },
-        [idedInodes, galleryStore, onGalleryEventRef]
-    );
+                images.push(idedInode.data);
+            }
+        });
+        galleryStore.setGalleryControl({
+            index: imageIndex,
+            inodes: images,
+            onEvent: (ev) => onGalleryEventRef.current(ev),
+        });
+    };
 
-    const handleAddAction = useCallback(
-        (localAddInodeAtIndex: number, handled: () => void) => {
-            const sibling = idedInodes[localAddInodeAtIndex]?.data;
-            let nextAddInodeParent: string | undefined;
-            if (sibling?.parentOperation?.canDirectoryAdd) {
-                nextAddInodeParent = sibling.parentPath;
-            } else if (inode.operation.canDirectoryAdd) {
-                nextAddInodeParent = path;
-            }
-            if (nextAddInodeParent !== undefined) {
-                setAddInodeAfterIndex((prev) => (prev === localAddInodeAtIndex ? undefined : localAddInodeAtIndex));
-                setAddInodeParent(nextAddInodeParent);
-                handled();
-            }
-        },
-        [idedInodes, inode.operation.canDirectoryAdd, path]
-    );
+    const handleAddAction = (localAddInodeAtIndex: number, handled: () => void): void => {
+        const sibling = idedInodes[localAddInodeAtIndex]?.data;
+        let nextAddInodeParent: string | undefined;
+        if (sibling?.parentOperation?.canDirectoryAdd) {
+            nextAddInodeParent = sibling.parentPath;
+        } else if (inode.operation.canDirectoryAdd) {
+            nextAddInodeParent = path;
+        }
+        if (nextAddInodeParent !== undefined) {
+            setAddInodeAfterIndex((prev) => (prev === localAddInodeAtIndex ? undefined : localAddInodeAtIndex));
+            setAddInodeParent(nextAddInodeParent);
+            handled();
+        }
+    };
 
-    const handleAction = useCallback(
-        (localAction: Action, localAddInodeAtIndex: number, handled: () => void) => {
-            if (localAction === Action.view) {
-                outerRef.current?.scrollIntoView();
-                handled();
-            } else if (localAction === Action.reload) {
-                load();
-                handled();
-            } else if (localAction === Action.add) {
-                handleAddAction(localAddInodeAtIndex, handled);
-            }
-        },
-        [handleAddAction, load]
-    );
+    const handleActionRef = useLatest((localAction: Action, localAddInodeAtIndex: number, handled: () => void) => {
+        if (localAction === Action.view) {
+            outerRef.current?.scrollIntoView();
+            handled();
+        } else if (localAction === Action.edit && inode.operation.canInodeRename) {
+            setIsEdit((prev) => !prev);
+            handled();
+        } else if (localAction === Action.reload) {
+            load();
+            handled();
+        } else if (localAction === Action.add) {
+            handleAddAction(localAddInodeAtIndex, handled);
+        }
+    });
 
     useImperativeHandle(
         ref,
         () => ({
-            triggerAction: (localAction, handled) => handleAction(localAction, beforeFirstInode, handled),
+            triggerAction: (localAction, handled) => handleActionRef.current(localAction, beforeFirstInode, handled),
         }),
-        [handleAction]
+        [handleActionRef]
     );
 
     const outerRef = useRef<HTMLDivElement>(null);
@@ -236,12 +229,36 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
         />
     );
 
+    const [newName, setNewName] = useState<string>(inode.name);
+    useDepsEffect(() => setNewName(inode.name), [inode.name]);
+
+    const move = useMove({context: appContext, inode, onMove});
+
+    const moveToNewName = (): void => {
+        if (newName !== inode.name) {
+            move(newName);
+        }
+        setIsEdit(false);
+    };
+
     return (
         <div ref={outerRef} className={className}>
+            {isEdit && (
+                <MoveInodeComponent
+                    setKeyboardControl={appStore.setKeyboardControl}
+                    newName={newName}
+                    setNewName={setNewName}
+                    newNameCursorPosition={inode.name.length}
+                    moveToNewName={moveToNewName}
+                    oldName={inode.name}
+                    spellCheck={appStore.appParameter.values.spellCheck}
+                    suggestionControl={suggestionControl}
+                />
+            )}
             <DirectoryBreadcrumb
                 disabled={action !== Action.view}
                 getEncodedPath={directoryPageParameter.getEncodedPath}
-                onClick={useCallback((ev) => handleAction(action, beforeFirstInode, () => ev.stopPropagation()), [action, handleAction])}
+                onClick={(ev): void => handleActionRef.current(action, beforeFirstInode, () => ev.stopPropagation())}
                 path={path}
             />
             <hr className='m-0' />
@@ -253,20 +270,19 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
             {directory !== undefined &&
                 idedInodes.map(({id, data, meta}, index) => (
                     <Fragment key={id}>
-                        <SequentialInodeComponent
+                        <InodeComponent
                             context={context}
                             decentDirectory={decentDirectory}
-                            handleAddAction={handleAddAction}
-                            id={id}
-                            index={index}
+                            filterHighlightTags={inode.filterHighlightTagSet ?? filterHighlightTags}
+                            handleAddAction={(handled): void => handleAddAction(index, handled)}
                             inode={data}
-                            setInode={onInodeChange}
+                            setInode={(newInode: Inode): void => onInodeChange(newInode, meta, id, index)}
                             isFirstLevel={isFirstLevel}
                             meta={meta}
                             nameCursorPosition={directory.nameCursorPosition ?? data.name.length}
-                            onInodeDelete={onInodeDelete}
-                            onInodeMove={onInodeMove}
-                            openGallery={openGallery}
+                            onDelete={(): void => onInodeDelete(data, index)}
+                            onMove={(newInode: Inode): void => onInodeMove(newInode, data, meta, id, index)}
+                            openGallery={(): void => openGallery(index)}
                             parentPath={path}
                         />
                         {addInodeAfterIndex === index && addInodeComponent}
@@ -275,10 +291,7 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
             {addInodeAfterIndex === afterLastInode && addInodeComponent}
             <div
                 className='hoverable overflow-auto p-2 text-muted text-nowrap'
-                onClick={useCallback(
-                    (ev: React.MouseEvent) => handleAction(action, afterLastInode, () => ev.stopPropagation()),
-                    [action, handleAction]
-                )}
+                onClick={(ev): void => handleActionRef.current(action, afterLastInode, () => ev.stopPropagation())}
             >
                 <span className='mdi mdi-folder-upload' /> {getName(path)}
             </div>
@@ -289,34 +302,3 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
 const afterLastInode = Infinity;
 const beforeFirstInode = -Infinity;
 const emptyIdedInodes: ReadonlyArray<Ided<Inode, InodeMeta>> = [];
-
-function SequentialInodeComponent({
-    handleAddAction,
-    id,
-    index,
-    setInode,
-    onInodeDelete,
-    onInodeMove,
-    openGallery,
-    ...props
-}: {
-    readonly handleAddAction: (index: number, handled: () => void) => void;
-    readonly id: string;
-    readonly index: number;
-    readonly setInode: (newInode: Inode, meta: InodeMeta, id: string, index: number) => void;
-    readonly onInodeDelete: (oldInode: Inode, index: number) => void;
-    readonly onInodeMove: (newInode: Inode, oldInode: Inode, meta: InodeMeta, id: string, index: number) => void;
-    readonly openGallery: (index: number) => void;
-} & InodeComponentProps): JSX.Element {
-    const {inode, meta} = props;
-    return (
-        <InodeComponent
-            handleAddAction={useCallback((handled) => handleAddAction(index, handled), [handleAddAction, index])}
-            setInode={useCallback((newInode: Inode) => setInode(newInode, meta, id, index), [setInode, meta, id, index])}
-            onDelete={useCallback(() => onInodeDelete(inode, index), [index, inode, onInodeDelete])}
-            onMove={useCallback((newInode: Inode) => onInodeMove(newInode, inode, meta, id, index), [onInodeMove, inode, meta, id, index])}
-            openGallery={useCallback(() => openGallery(index), [openGallery, index])}
-            {...props}
-        />
-    );
-}

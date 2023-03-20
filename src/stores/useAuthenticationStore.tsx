@@ -1,5 +1,6 @@
 import {AxiosError, AxiosStatic} from 'axios';
 import {serverPath} from 'common/constants';
+import {useLatest} from 'common/ReactUtil';
 import {useAsyncCallback} from 'common/useAsyncCallback';
 import {Dispatch, ReactNode, useMemo, useState} from 'react';
 import {DropdownItem} from 'reactstrap';
@@ -21,31 +22,29 @@ export function useAuthenticationStore(
     readonly isLoggedIn: boolean;
 } {
     const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
-    const logout = useAsyncCallback(
-        () =>
-            appStore.indicateLoading(
-                appStore.preventClose(
-                    axios.get(serverPath.authenticatedPath.logout(), {
-                        withCredentials: true,
-                    })
-                )
-            ),
-        () => setIsLoggedIn(false),
-        consoleStore.handleError
-    );
-    const logoutDropdownItem = useMemo(
-        () => (
-            <DropdownItem onClick={logout}>
-                <span className='mdi mdi-logout' /> Logout
-            </DropdownItem>
-        ),
-        [logout]
+    const logoutRef = useLatest(
+        useAsyncCallback(
+            () =>
+                appStore.indicateLoading(
+                    appStore.preventClose(
+                        axios.get(serverPath.authenticatedPath.logout(), {
+                            withCredentials: true,
+                        })
+                    )
+                ),
+            () => setIsLoggedIn(false),
+            consoleStore.handleError
+        )
     );
     return {
         authenticationStore: useMemo(
             () => ({
-                logoutDropdownItem,
-                handleAuthenticationError: (error) => {
+                logoutDropdownItem: (
+                    <DropdownItem onClick={(): Promise<void> => logoutRef.current()}>
+                        <span className='mdi mdi-logout' /> Logout
+                    </DropdownItem>
+                ),
+                handleAuthenticationError: (error): void => {
                     const axiosError = error as AxiosError<string> | undefined;
                     const status = axiosError?.response?.status;
                     if (status === 401) {
@@ -56,7 +55,7 @@ export function useAuthenticationStore(
                 },
                 setIsLoggedIn,
             }),
-            [consoleStore, logoutDropdownItem]
+            [consoleStore, logoutRef]
         ),
         isLoggedIn,
     };

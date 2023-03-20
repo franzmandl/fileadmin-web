@@ -1,4 +1,4 @@
-import {Dispatch, ReactNode, useCallback} from 'react';
+import {Dispatch, ReactNode} from 'react';
 import {DropdownItem, FormGroup, Input} from 'reactstrap';
 import './DropdownItemCheckbox.scss';
 
@@ -18,12 +18,7 @@ export function DropdownItemCheckbox({
     return (
         <DropdownItem className='dropdown-item-checkbox' hidden={hidden} tag='label' toggle={false}>
             <FormGroup check className='m-0'>
-                <Input
-                    checked={checked}
-                    disabled={disabled}
-                    onChange={useCallback((ev: React.ChangeEvent<HTMLInputElement>) => setChecked(ev.target.checked), [setChecked])}
-                    type='checkbox'
-                />
+                <Input checked={checked} disabled={disabled} onChange={(ev): void => setChecked(ev.target.checked)} type='checkbox' />
                 {children}
             </FormGroup>
         </DropdownItem>

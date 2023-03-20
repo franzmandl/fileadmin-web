@@ -73,6 +73,18 @@ export class InodeStore {
             days,
         }).then(getResponseData);
 
+    readonly toDirectory = (path: string): Promise<Inode> =>
+        this.applyCommand<BaseInode>({
+            _type: 'ToDirectory',
+            path,
+        }).then(createInodeFromResponse);
+
+    readonly toFile = (path: string): Promise<Inode> =>
+        this.applyCommand<BaseInode>({
+            _type: 'ToFile',
+            path,
+        }).then(createInodeFromResponse);
+
     readonly getFile = (path: string): Promise<FileContent> =>
         this.axios
             .get<string>(serverPath.authenticatedPath.file(encodePath(path)), {

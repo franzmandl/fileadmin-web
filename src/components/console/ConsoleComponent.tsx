@@ -1,4 +1,4 @@
-import {Fragment, ReactNode, useCallback, useState} from 'react';
+import {Fragment, ReactNode, useState} from 'react';
 import {DropdownItem} from 'reactstrap';
 import './ConsoleComponent.scss';
 import {DropdownItemCheckbox} from 'components/dropdown/DropdownItemCheckbox';
@@ -31,10 +31,10 @@ export function ConsoleComponent({
         ConsoleEntryLevel.warning,
         ConsoleEntryLevel.error,
     ]);
-    const showLevel = useCallback((level: ConsoleEntryLevel) => showLevels.indexOf(level) !== -1, [showLevels]);
-    const setShowLevel = useCallback((level: ConsoleEntryLevel, value: boolean) => {
+    const showLevel = (level: ConsoleEntryLevel): boolean => showLevels.indexOf(level) !== -1;
+    const setShowLevel = (level: ConsoleEntryLevel, value: boolean): void => {
         setShowLevels((prev) => (value ? [...prev, level] : prev.filter((value) => value !== level)));
-    }, []);
+    };
     return (
         <div className='console-component page page-landscape' hidden={hidden}>
             <div className='page-main'>
@@ -84,10 +84,7 @@ function ToggleDropdownItem({
     readonly setShowLevel: (level: ConsoleEntryLevel, value: boolean) => void;
 }): JSX.Element {
     return (
-        <DropdownItemCheckbox
-            checked={showLevel(level)}
-            setChecked={useCallback((value) => setShowLevel(level, value), [level, setShowLevel])}
-        >
+        <DropdownItemCheckbox checked={showLevel(level)} setChecked={(value): void => setShowLevel(level, value)}>
             {children}
         </DropdownItemCheckbox>
     );

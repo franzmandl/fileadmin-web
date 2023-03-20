@@ -18,7 +18,7 @@ export function RenderIfVisible({
     readonly root?: HTMLElement | null;
     readonly placeholder?: ReactNode;
     readonly children: ReactNode;
-}) {
+}): JSX.Element {
     const [isVisible, setIsVisible] = useState<boolean>(initialVisible);
     const [wasVisible, setWasVisible] = useState<boolean>(initialVisible);
     const setIsVisibleAndWasVisible = useRef((nextIsVisible: boolean) => {
@@ -43,7 +43,7 @@ export function RenderIfVisible({
                 {root}
             );
             observer.observe(element);
-            return () => {
+            return (): void => {
                 observer.unobserve(element);
             };
         } else {

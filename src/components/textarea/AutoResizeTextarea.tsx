@@ -1,6 +1,6 @@
 import useResizeObserver from '@react-hook/resize-observer';
 import {stopPropagation, useDepsEffect} from 'common/ReactUtil';
-import {Dispatch, KeyboardEventHandler, useCallback, useRef} from 'react';
+import {Dispatch, KeyboardEventHandler, useRef} from 'react';
 import {RichTextarea, SuggestionControl} from './RichTextarea';
 import {SetKeyboardControl} from 'components/keyboard-control/KeyboardControl';
 
@@ -35,13 +35,13 @@ export function AutoResizeTextarea({
     readonly setValue: Dispatch<string>;
 }): JSX.Element {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const resizeTextarea = useCallback(() => {
+    const resizeTextarea = (): void => {
         const textarea = textareaRef.current;
         if (textarea !== null) {
             textarea.style.height = 'auto'; // Necessary!
             textarea.style.height = `${Math.min(window.innerHeight, textarea.scrollHeight)}px`;
         }
-    }, []);
+    };
     useDepsEffect(resizeTextarea, [value]);
     useResizeObserver(document.body, resizeTextarea);
     useDepsEffect(() => {

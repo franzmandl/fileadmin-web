@@ -1,20 +1,20 @@
+import classNames from 'classnames';
 import {useDepsEffect} from 'common/ReactUtil';
 import {useAsyncCallback} from 'common/useAsyncCallback';
 import {Inode} from 'model/Inode';
-import React, {Dispatch, ReactNode, useCallback, useState} from 'react';
-import {DropdownItem} from 'reactstrap';
+import {Dispatch, useState} from 'react';
 import {AppContext} from 'stores/AppContext';
 
-export function UploadDropdownItem({
+export function UploadComponent({
     accept,
-    children,
+    className,
     context: {appStore, consoleStore, inodeStore},
     inode,
     setInode,
     setShowDropdown,
 }: {
     readonly accept?: string;
-    readonly children: ReactNode;
+    readonly className?: string;
     readonly context: AppContext;
     readonly inode: Inode;
     readonly setInode: Dispatch<Inode>;
@@ -33,14 +33,8 @@ export function UploadDropdownItem({
         }
     }, [selectedFile]);
     return (
-        <DropdownItem disabled={!inode.operation.canFileSet} hidden={!inode.isFile} style={{cursor: 'pointer'}} tag='label' toggle={false}>
-            {children}
-            <input
-                accept={accept}
-                hidden
-                type='file'
-                onChange={useCallback((ev: React.ChangeEvent<HTMLInputElement>) => setSelectedFile(ev.target.files?.[0] ?? undefined), [])}
-            />
-        </DropdownItem>
+        <label className={classNames(className, !inode.operation.canFileSet ? 'disabled' : '')} style={{cursor: 'pointer'}}>
+            <input accept={accept} hidden type='file' onChange={(ev): void => setSelectedFile(ev.target.files?.[0] ?? undefined)} />
+        </label>
     );
 }

@@ -28,6 +28,7 @@
   "plugins": ["react", "@typescript-eslint", "prettier"],
   "rules": {
     "prettier/prettier": ["warn"],
+    "@typescript-eslint/explicit-function-return-type": ["error"],
     "@typescript-eslint/no-explicit-any": ["off"],
     "no-param-reassign": ["error"],
     "no-restricted-imports": [

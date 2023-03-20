@@ -17,7 +17,7 @@ export function useAudioPlayerStore(appStore: AppStore): {
         audioPlayerControl,
         audioPlayerStore: useMemo(
             () => ({
-                enqueue: (inode) => {
+                enqueue: (inode): void => {
                     setAudioPlayerControl((prev) => {
                         if (prev !== undefined) {
                             appStore.toast(<>Added to queue.</>);

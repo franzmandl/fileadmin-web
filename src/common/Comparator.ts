@@ -21,7 +21,7 @@ export class Comparator {
         readonly sortPriority: boolean,
         readonly sortSpecialFirst: boolean
     ) {
-        this.compareFn = ({data: a}, {data: b}) => {
+        this.compareFn = ({data: a}, {data: b}): number => {
             if (sortSpecialFirst) {
                 if (isSpecial(a)) {
                     if (!isSpecial(b)) {

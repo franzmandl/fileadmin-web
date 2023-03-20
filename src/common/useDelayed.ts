@@ -1,4 +1,4 @@
-import {useCallback, useRef} from 'react';
+import {useRef} from 'react';
 import {useLatest} from './ReactUtil';
 
 export function useDelayed(
@@ -12,23 +12,23 @@ export function useDelayed(
         fn();
     });
 
-    const doNow = useCallback(() => {
+    const doNow = (): void => {
         if (timeoutRef.current !== undefined) {
             clearTimeout(timeoutRef.current);
         } else {
             onStart();
         }
         fnRef.current();
-    }, [fnRef, onStart]);
+    };
 
-    const doDelayed = useCallback((): void => {
+    const doDelayed = (): void => {
         if (timeoutRef.current !== undefined) {
             clearTimeout(timeoutRef.current);
         } else {
             onStart();
         }
         timeoutRef.current = setTimeout(() => fnRef.current(), timeoutMs);
-    }, [timeoutMs, onStart, fnRef]);
+    };
 
     return {doDelayed, doNow};
 }

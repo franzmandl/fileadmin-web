@@ -1,5 +1,5 @@
 import {useDepsEffect} from 'common/ReactUtil';
-import React, {ReactNode, useCallback, useRef} from 'react';
+import React, {ReactNode, useRef} from 'react';
 import {Button} from 'reactstrap';
 import {KeyboardControl} from './KeyboardControl';
 
@@ -12,18 +12,10 @@ export function KeyboardControlComponent({
 }): JSX.Element {
     return (
         <>
-            <CursorButton
-                disabled={keyboardControl === undefined}
-                hidden={hidden}
-                moveCursor={useCallback(() => keyboardControl?.moveCursor(-1), [keyboardControl])}
-            >
+            <CursorButton disabled={keyboardControl === undefined} hidden={hidden} moveCursor={(): void => keyboardControl?.moveCursor(-1)}>
                 <span className='mdi mdi-arrow-left' />
             </CursorButton>
-            <CursorButton
-                disabled={keyboardControl === undefined}
-                hidden={hidden}
-                moveCursor={useCallback(() => keyboardControl?.moveCursor(1), [keyboardControl])}
-            >
+            <CursorButton disabled={keyboardControl === undefined} hidden={hidden} moveCursor={(): void => keyboardControl?.moveCursor(1)}>
                 <span className='mdi mdi-arrow-right' />
             </CursorButton>
         </>
@@ -51,37 +43,34 @@ function CursorButton({
         },
         []
     );
-    const intervalCallback = useCallback(() => {
+    const intervalCallback = (): void => {
         moveCursor();
         timeoutRef.current = setTimeout(() => intervalCallbackRef.current(), 100);
-    }, [moveCursor]);
+    };
     // BEGIN useLatest
     const intervalCallbackRef = useRef(intervalCallback);
     intervalCallbackRef.current = intervalCallback;
     // END useLatest
-    const clear = useCallback((ev: React.SyntheticEvent) => {
+    const clear = (ev: React.SyntheticEvent): void => {
         ev.preventDefault();
         if (timeoutRef.current !== undefined) {
             clearTimeout(timeoutRef.current);
         }
-    }, []);
+    };
     return (
         <Button
             className='page-sidebar-icon'
             color='dark'
             disabled={disabled}
             hidden={hidden}
-            onPointerDown={useCallback(
-                (ev: React.SyntheticEvent) => {
-                    ev.preventDefault();
-                    moveCursor();
-                    if (timeoutRef.current !== undefined) {
-                        clearTimeout(timeoutRef.current);
-                    }
-                    timeoutRef.current = setTimeout(() => intervalCallbackRef.current(), 300);
-                },
-                [moveCursor]
-            )}
+            onPointerDown={(ev): void => {
+                ev.preventDefault();
+                moveCursor();
+                if (timeoutRef.current !== undefined) {
+                    clearTimeout(timeoutRef.current);
+                }
+                timeoutRef.current = setTimeout(() => intervalCallbackRef.current(), 300);
+            }}
             onPointerUp={clear}
             onPointerCancel={clear} // Happen after long presses on mobile devices instead of pointerUp.
         >

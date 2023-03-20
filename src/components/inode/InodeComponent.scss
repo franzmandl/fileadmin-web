@@ -18,3 +18,22 @@
         background-color: rgba(#dcb3ff, 0.083);
     }
 }
+
+.inode-component-dropdown-buttons {
+    padding: 0;
+    display: grid;
+    grid-template-columns: auto auto auto;
+
+    > .inode-component-dropdown-button {
+        --bs-btn-bg: $dropdown-dark-bg;
+        --bs-btn-color: $dropdown-dark-link-color;
+        --bs-btn-padding-y: 0.5rem;
+        border-radius: 0;
+        border: none;
+
+        &:hover {
+            color: var(--bs-dropdown-link-hover-color);
+            background-color: var(--bs-dropdown-link-hover-bg);
+        }
+    }
+}

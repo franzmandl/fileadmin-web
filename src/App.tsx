@@ -1,7 +1,7 @@
-import {ReactNode, useCallback, useMemo, useState} from 'react';
+import {ReactNode, useMemo, useState} from 'react';
 import axios from 'axios';
 import {Alert} from 'reactstrap';
-import {DirectoryPage} from 'pages/DirectoryPage';
+import {DirectoryPageMemorized} from 'pages/DirectoryPage';
 import {InodeStore} from 'stores/InodeStore';
 import {FilePage} from 'pages/FilePage';
 import {LoginPage} from 'pages/LoginPage';
@@ -32,7 +32,7 @@ export function App(): JSX.Element {
     const {galleryControl, galleryStore} = useGalleryStore(appStore, isLoggedIn);
     const suggestionStore = useSuggestionStore(appStore, consoleStore, inodeStore);
 
-    const context = useMemo<AppContext>(
+    const context: AppContext = useMemo(
         () => ({
             appStore,
             audioPlayerStore,
@@ -58,11 +58,7 @@ export function App(): JSX.Element {
         <div className={`app ${classNames}`}>
             {renderPage()}
             {audioPlayerControl && <AudioPlayer audioPlayerControl={audioPlayerControl} context={context} />}
-            <ConsoleComponent
-                entries={consoleEntries}
-                hidden={!showConsole}
-                hide={useCallback(() => setShowConsole(false), [setShowConsole])}
-            />
+            <ConsoleComponent entries={consoleEntries} hidden={!showConsole} hide={(): void => setShowConsole(false)} />
             {galleryControl !== undefined && (
                 <Gallery context={context} galleryControl={galleryControl} keyboardControl={keyboardControl} />
             )}
@@ -77,7 +73,7 @@ export function App(): JSX.Element {
         if (!isLoggedIn) {
             return <LoginPage axios={axios} context={context} />;
         } else if (appStore.appParameter.values.location === AppLocation.inodes) {
-            return <DirectoryPage context={context} keyboardControl={keyboardControl} />;
+            return <DirectoryPageMemorized context={context} keyboardControl={keyboardControl} />;
         } else if (appStore.appParameter.values.location === AppLocation.edit) {
             const path = appStore.currentParams.get(ParamName.path);
             if (path !== null) {

@@ -3,7 +3,6 @@ import {constant} from 'common/constants';
 import {separator} from 'common/Util';
 import {Inode} from 'model/Inode';
 import {Task} from 'model/Task';
-import {useCallback} from 'react';
 import {DropdownItem} from 'reactstrap';
 import {AppContext} from 'stores/AppContext';
 
@@ -52,18 +51,16 @@ function TaskDropdownItem({
         <DropdownItem
             className={isMoved ? undefined : className}
             disabled={isMoved}
-            onClick={useCallback(
-                () =>
-                    move(relativeDestination, () =>
-                        appStore.toast(
-                            <>
-                                {relativeDestination.indexOf(separator) !== -1 ? 'Moved to' : 'Set to'}&nbsp;
-                                <span className={classNames('badge', className)}>{friendlyName}</span>
-                            </>
-                        )
-                    ),
-                [move, relativeDestination, appStore, className, friendlyName]
-            )}
+            onClick={(): void =>
+                move(relativeDestination, () =>
+                    appStore.toast(
+                        <>
+                            {relativeDestination.indexOf(separator) !== -1 ? 'Moved to' : 'Set to'}&nbsp;
+                            <span className={classNames('badge', className)}>{friendlyName}</span>
+                        </>
+                    )
+                )
+            }
             title={relativeDestination}
         >
             {friendlyName}

@@ -5,7 +5,7 @@ import {useLatest, useSanitizedValue} from 'common/ReactUtil';
 import {useAsyncCallback} from 'common/useAsyncCallback';
 import {nameAllowSlashRegex, encodePath, isAnyType, mod, Type} from 'common/Util';
 import {Inode} from 'model/Inode';
-import React, {Dispatch, useCallback, useMemo, useState} from 'react';
+import React, {Dispatch, useState} from 'react';
 import {Button} from 'reactstrap';
 import {AppContext} from 'stores/AppContext';
 import {ReadonlySet} from 'typescript';
@@ -39,7 +39,7 @@ export function Gallery({
 
     const {isLoaded, loadIndex} = useLoadedIndices(currentIndex, setCurrentIndex, inodes);
     const [, setNewSanitizedName] = useSanitizedValue([newName, setNewName], nameAllowSlashRegex);
-    const onClose = useCallback(() => galleryStore.setGalleryControl(undefined), [galleryStore]);
+    const onClose = (): void => galleryStore.setGalleryControl(undefined);
 
     useDepsEffect(() => {
         if (currentInode === undefined || !appStore.appParameter.values.galleryIsOpen) {
@@ -77,25 +77,22 @@ export function Gallery({
         },
         consoleStore.handleError
     );
-    const move = useCallback(() => {
+    const move = (): void => {
         if (cannotMoveToNewName) {
             return;
         }
         moveImmediately();
-    }, [cannotMoveToNewName, moveImmediately]);
+    };
 
-    const onSaveKeyDown = useCallback(
-        (ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
-            ev.preventDefault();
-            move();
-        },
-        [move]
-    );
+    const onSaveKeyDown = (ev: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+        ev.preventDefault();
+        move();
+    };
 
-    const prevImage = useCallback(() => loadIndex(getPrevIndex(inodes, currentIndex)), [currentIndex, inodes, loadIndex]);
-    const nextImage = useCallback(() => loadIndex(getNextIndex(inodes, currentIndex)), [currentIndex, inodes, loadIndex]);
-    const rotateClockwise = useCallback(() => setRotateDeg((prev) => mod(prev + 90, 360)), []);
-    const rotateCounterclockwise = useCallback(() => setRotateDeg((prev) => mod(prev - 90, 360)), []);
+    const prevImage = (): void => loadIndex(getPrevIndex(inodes, currentIndex));
+    const nextImage = (): void => loadIndex(getNextIndex(inodes, currentIndex));
+    const rotateClockwise = (): void => setRotateDeg((prev) => mod(prev + 90, 360));
+    const rotateCounterclockwise = (): void => setRotateDeg((prev) => mod(prev - 90, 360));
 
     const onKeyDownRef = useLatest((ev: KeyboardEvent): boolean => {
         if (ev.target === document.body) {
@@ -134,15 +131,12 @@ export function Gallery({
     });
 
     useDepsEffect(() => {
-        const listener = (ev: KeyboardEvent) => onKeyDownRef.current(ev);
+        const listener = (ev: KeyboardEvent): boolean => onKeyDownRef.current(ev);
         appStore.keyDownListeners.add(listener);
         return () => appStore.keyDownListeners.remove(listener);
     }, [appStore.keyDownListeners]);
 
-    const suggestionControl = useMemo(
-        () => suggestionStore.createSuggestionControl(currentInode?.path),
-        [currentInode?.path, suggestionStore]
-    );
+    const suggestionControl = suggestionStore.createSuggestionControl(currentInode?.path);
 
     return (
         <div className='gallery page page-auto'>
@@ -180,13 +174,10 @@ export function Gallery({
                     />
                     <span
                         className='mdi mdi-close fs-3 px-1 position-absolute top-0 end-0'
-                        onClick={useCallback(
-                            (ev: React.MouseEvent) => {
-                                ev.stopPropagation();
-                                onClose();
-                            },
-                            [onClose]
-                        )}
+                        onClick={(ev): void => {
+                            ev.stopPropagation();
+                            onClose();
+                        }}
                     />
                 </div>
                 <div className='gallery-bottom'>
@@ -208,30 +199,30 @@ export function Gallery({
                         className='page-sidebar-icon'
                         color='success'
                         disabled={cannotMoveToNewName}
-                        onClick={useCallback(() => {
+                        onClick={(): void => {
                             focusNothing();
                             move();
-                        }, [move])}
+                        }}
                     >
                         <span className='mdi mdi-content-save-outline' />
                     </Button>
                     <Button
                         className='page-sidebar-icon'
                         color='warning'
-                        onClick={useCallback(() => {
+                        onClick={(): void => {
                             focusNothing();
                             rotateCounterclockwise();
-                        }, [rotateCounterclockwise])}
+                        }}
                     >
                         <span className='mdi mdi-rotate-left' />
                     </Button>
                     <Button
                         className='page-sidebar-icon'
                         color='light'
-                        onClick={useCallback(() => {
+                        onClick={(): void => {
                             focusNothing();
                             setBackgroundColorClassNameIndex((prev) => mod(prev + 1, backgroundColorClassNames.length));
-                        }, [])}
+                        }}
                     >
                         <span className='mdi mdi-contrast-circle' />
                     </Button>
@@ -248,10 +239,10 @@ export function Gallery({
                     <Button
                         className='page-sidebar-icon'
                         color='danger'
-                        onClick={useCallback(() => {
+                        onClick={(): void => {
                             focusNothing();
                             delete_();
-                        }, [delete_])}
+                        }}
                     >
                         <span className='mdi mdi-trash-can' />
                     </Button>
@@ -269,22 +260,26 @@ export function Gallery({
 
 const backgroundColorClassNames = ['', 'bg-black', 'bg-white'];
 
-function useLoadedIndices(currentIndex: number, setCurrentIndex: Dispatch<number>, hasLength: HasLength) {
+function useLoadedIndices(
+    currentIndex: number,
+    setCurrentIndex: Dispatch<number>,
+    hasLength: HasLength
+): {
+    readonly isLoaded: (index: number) => boolean;
+    readonly loadIndex: (index: number) => void;
+} {
     const [loadedIndices, setLoadedIndices] = useState<ReadonlySet<number>>(new Set<number>());
     useDepsEffect(() => setLoadedIndices(addAroundIndex(new Set<number>(), hasLength, currentIndex)), [hasLength]);
-    const loadIndex = useCallback(
-        (index: number) => {
-            setCurrentIndex(index);
-            setLoadedIndices((prev) =>
-                addAroundIndex(
-                    new Set<number>(prev as Set<number> /* ReadonlySet is not iterable for some reason, but Set is. */),
-                    hasLength,
-                    index
-                )
-            );
-        },
-        [hasLength, setCurrentIndex]
-    );
-    const isLoaded = useCallback((index: number) => loadedIndices.has(index), [loadedIndices]);
+    const loadIndex = (index: number): void => {
+        setCurrentIndex(index);
+        setLoadedIndices((prev) =>
+            addAroundIndex(
+                new Set<number>(prev as Set<number> /* ReadonlySet is not iterable for some reason, but Set is. */),
+                hasLength,
+                index
+            )
+        );
+    };
+    const isLoaded = (index: number): boolean => loadedIndices.has(index);
     return {isLoaded, loadIndex};
 }

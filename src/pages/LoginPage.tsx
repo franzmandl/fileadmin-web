@@ -1,7 +1,7 @@
 import {AxiosStatic} from 'axios';
 import {serverPath, constant, LocalStorageKey} from 'common/constants';
 import {FormGroupCheckbox} from 'components/util/FormGroupCheckbox';
-import React, {useCallback, useState} from 'react';
+import {useState} from 'react';
 import {Button, Card, CardBody, CardHeader, Col, Form, FormGroup, Input, Label} from 'reactstrap';
 import './LoginPage.scss';
 import {focusNothing} from 'common/ReactUtil';
@@ -44,13 +44,10 @@ export function LoginPage({
 
     return (
         <Form
-            onSubmit={useCallback(
-                (ev: React.FormEvent) => {
-                    ev.preventDefault();
-                    login();
-                },
-                [login]
-            )}
+            onSubmit={(ev): void => {
+                ev.preventDefault();
+                login();
+            }}
             className='login-page'
         >
             <div>
@@ -61,14 +58,7 @@ export function LoginPage({
                             <FormGroup row>
                                 <Label lg='2'>Username</Label>
                                 <Col lg='10'>
-                                    <Input
-                                        autoFocus={!username}
-                                        value={username}
-                                        onChange={useCallback(
-                                            (ev: React.ChangeEvent<HTMLInputElement>) => setUsername(ev.target.value),
-                                            []
-                                        )}
-                                    />
+                                    <Input autoFocus={!username} value={username} onChange={(ev): void => setUsername(ev.target.value)} />
                                 </Col>
                             </FormGroup>
                             <FormGroup row>
@@ -78,10 +68,7 @@ export function LoginPage({
                                         autoFocus={!!username}
                                         type='password'
                                         value={password}
-                                        onChange={useCallback(
-                                            (ev: React.ChangeEvent<HTMLInputElement>) => setPassword(ev.target.value),
-                                            []
-                                        )}
+                                        onChange={(ev): void => setPassword(ev.target.value)}
                                     />
                                 </Col>
                             </FormGroup>

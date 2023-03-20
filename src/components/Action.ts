@@ -20,4 +20,5 @@ export const keyToAction = Object.freeze<Record<string, Action | undefined>>({
     d: Action.delete,
     Delete: Action.delete,
     Escape: Action.view,
+    F2: Action.edit,
 });

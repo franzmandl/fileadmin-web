@@ -1,18 +1,6 @@
 import {getName} from 'common/Util';
-import {mount, ReactWrapper} from 'enzyme';
-import {App} from './App';
 
 describe('<App/>', () => {
-    let component: ReactWrapper;
-
-    beforeEach(async () => {
-        component = mount(<App />);
-    });
-
-    it('test 1', async () => {
-        expect(component).toBeDefined();
-    });
-
     it('test split', async () => {
         expect(''.split('\n')).toHaveLength(1);
         expect(

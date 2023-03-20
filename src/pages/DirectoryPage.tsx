@@ -1,9 +1,9 @@
 import {useLatest, useDepsEffect, stopPropagationAndFocusNothing, focusNothing} from 'common/ReactUtil';
-import {encodePath, getName, getParentPath, separator, noop, paramsToHash} from 'common/Util';
+import {encodePath, getName, getParentPath, separator, paramsToHash} from 'common/Util';
 import {Action, keyToAction} from 'components/Action';
 import {DirectoryComponent} from 'components/inode/DirectoryComponent';
 import {ComparatorDropdown} from 'components/inode/ComparatorDropdown';
-import React, {useCallback, useMemo, useRef, useState} from 'react';
+import React, {memo, useMemo, useRef, useState} from 'react';
 import {Button, DropdownItem, Input} from 'reactstrap';
 import useResizeObserver from '@react-hook/resize-observer';
 import {MenuDropdown} from 'components/dropdown/MenuDropdown';
@@ -112,15 +112,12 @@ export function DirectoryPage({
         document.title = `Directory ${getName(path) || separator}`;
     }, [path]);
 
-    const handleAction = useCallback(
-        (ev: React.MouseEvent) => {
-            if (action !== Action.view) {
-                consoleStore.logError('Cannot handle action: ' + action);
-            }
-            ev.stopPropagation();
-        },
-        [action, consoleStore]
-    );
+    const handleAction = (ev: React.MouseEvent): void => {
+        if (action !== Action.view) {
+            consoleStore.logError('Cannot handle action: ' + action);
+        }
+        ev.stopPropagation();
+    };
 
     const setIsReadyRef = useRef(false);
     const [minHeight, setMinHeight] = useState<number>(0);
@@ -134,33 +131,27 @@ export function DirectoryPage({
             setMinHeight((prev) => Math.max(prev, entry.contentRect.height));
         }
     });
-    const onScroll = useCallback((ev: React.UIEvent<HTMLDivElement>) => {
+    const onScroll = (ev: React.UIEvent<HTMLDivElement>): void => {
         if (setIsReadyRef.current && watchHeightRef.current !== null) {
             const bounding = watchHeightRef.current.getBoundingClientRect();
             setMinHeight(Math.max(ev.currentTarget.offsetHeight - bounding.top, watchHeightRef.current.offsetHeight));
         }
-    }, []);
-    const setIsReady = useCallback(
-        (value: boolean) => {
-            setIsReadyRef.current = value;
-            if (value && previousPath !== undefined) {
-                const previousElement = document.querySelector(`[data-path="${encodePath(previousPath)}"]`);
-                if (previousElement !== null) {
-                    previousElement.scrollIntoView({block: 'center'});
-                    previousElement.classList.add('visited');
-                }
+    };
+    const setIsReady = (value: boolean): void => {
+        setIsReadyRef.current = value;
+        if (value && previousPath !== undefined) {
+            const previousElement = document.querySelector(`[data-path="${encodePath(previousPath)}"]`);
+            if (previousElement !== null) {
+                previousElement.scrollIntoView({block: 'center'});
+                previousElement.classList.add('visited');
             }
-        },
-        [previousPath]
-    );
-    const onActionChange = useCallback(
-        (nextAction: Action) => {
-            focusNothing();
-            setAction(nextAction);
-            actionChangeListeners.current.forEach((listener) => listener(nextAction, action));
-        },
-        [action, setAction]
-    );
+        }
+    };
+    const onActionChange = (nextAction: Action): void => {
+        focusNothing();
+        setAction(nextAction);
+        actionChangeListeners.current.forEach((listener) => listener(nextAction, action));
+    };
 
     const onKeyDownRef = useLatest((ev: KeyboardEvent): boolean => {
         if (ev.target === document.body) {
@@ -177,27 +168,24 @@ export function DirectoryPage({
     });
 
     useDepsEffect(() => {
-        const listener = (ev: KeyboardEvent) => onKeyDownRef.current(ev);
+        const listener = (ev: KeyboardEvent): boolean => onKeyDownRef.current(ev);
         appStore.keyDownListeners.add(listener);
         return () => appStore.keyDownListeners.remove(listener);
     }, [appStore.keyDownListeners]);
 
-    const suggestionControl = useMemo(() => suggestionStore.createSuggestionControl(path), [path, suggestionStore]);
+    const suggestionControl = suggestionStore.createSuggestionControl(path);
 
-    const pageContext = useMemo<DirectoryPageContext>(
-        () => ({
-            actionChangeListeners: {
-                add: (listener: (nextAction: Action, prevAction: Action) => void) => noop(actionChangeListeners.current.add(listener)),
-                remove: (listener: (nextAction: Action, prevAction: Action) => void) =>
-                    noop(actionChangeListeners.current.delete(listener)),
-            },
-            appContext: context,
-            comparator,
-            directoryPageParameter,
-            dropdownContainerRef: watchHeightRef,
-        }),
-        [comparator, context, directoryPageParameter]
-    );
+    const pageContext: DirectoryPageContext = {
+        actionChangeListeners: {
+            add: (listener: (nextAction: Action, prevAction: Action) => void): void => void actionChangeListeners.current.add(listener),
+            remove: (listener: (nextAction: Action, prevAction: Action) => void): void =>
+                void actionChangeListeners.current.delete(listener),
+        },
+        appContext: context,
+        comparator,
+        directoryPageParameter,
+        dropdownContainerRef: watchHeightRef,
+    };
 
     return (
         <div className={`page page-auto action-${action}`}>
@@ -220,7 +208,7 @@ export function DirectoryPage({
                         </div>
                         {canSearch && (
                             <SearchComponent
-                                setPath={directoryPageParameter.setPath}
+                                setPath={directoryPageParameter.pushPath}
                                 setKeyboardControl={appStore.setKeyboardControl}
                                 path={path}
                                 spellCheck={appStore.appParameter.values.spellCheck}
@@ -231,10 +219,12 @@ export function DirectoryPage({
                             setCanSearch={setCanSearch}
                             context={pageContext}
                             decentDirectory={decentDirectory}
+                            filterHighlightTags={inode.filterHighlightTagSet}
                             inode={inode}
                             isFirstLevel={true}
                             setInode={setInode}
                             setIsReady={setIsReady}
+                            onMove={(inode): void => directoryPageParameter.replacePath(inode.path)}
                             path={path}
                             suggestionControl={suggestionControl}
                         />
@@ -250,7 +240,7 @@ export function DirectoryPage({
                         outline
                         color='primary'
                         active={action === Action.view}
-                        onClick={useCallback(() => onActionChange(Action.view), [onActionChange])}
+                        onClick={(): void => onActionChange(Action.view)}
                     >
                         <span className='mdi mdi-eye' />
                     </Button>
@@ -259,7 +249,7 @@ export function DirectoryPage({
                         outline
                         color='warning'
                         active={action === Action.edit}
-                        onClick={useCallback(() => onActionChange(Action.edit), [onActionChange])}
+                        onClick={(): void => onActionChange(Action.edit)}
                     >
                         <span className='mdi mdi-pencil' />
                     </Button>
@@ -267,7 +257,7 @@ export function DirectoryPage({
                         className='page-sidebar-icon'
                         outline
                         active={action === Action.reload}
-                        onClick={useCallback(() => onActionChange(Action.reload), [onActionChange])}
+                        onClick={(): void => onActionChange(Action.reload)}
                     >
                         <span className='mdi mdi-refresh' />
                     </Button>
@@ -276,7 +266,7 @@ export function DirectoryPage({
                         outline
                         color='success'
                         active={action === Action.add}
-                        onClick={useCallback(() => onActionChange(Action.add), [onActionChange])}
+                        onClick={(): void => onActionChange(Action.add)}
                     >
                         <span className='mdi mdi-plus' />
                     </Button>
@@ -285,21 +275,21 @@ export function DirectoryPage({
                         outline
                         color='danger'
                         active={action === Action.delete}
-                        onClick={useCallback(() => onActionChange(Action.delete), [onActionChange])}
+                        onClick={(): void => onActionChange(Action.delete)}
                     >
                         <span className='mdi mdi-trash-can' />
                     </Button>
                     <Button
                         className='page-sidebar-icon'
                         color='dark'
-                        onPointerDown={useCallback((ev: React.SyntheticEvent) => {
+                        onPointerDown={(ev): void => {
                             ev.preventDefault();
                             const scrollElement = scrollToAboveScrollable(watchHeightRef.current ?? undefined);
                             if (scrollElement !== document.activeElement) {
                                 // Most likely the active element is not a textarea and we want to blur any focused textareas.
                                 focusNothing();
                             }
-                        }, [])}
+                        }}
                     >
                         <span className='mdi mdi-arrow-collapse-up' />
                     </Button>
@@ -323,7 +313,7 @@ export function DirectoryPage({
                                 placeholder='Today'
                                 style={{width: '7.7rem'}}
                                 value={today}
-                                onChange={useCallback((ev: React.ChangeEvent<HTMLInputElement>) => setToday(ev.target.value), [setToday])}
+                                onChange={(ev): void => setToday(ev.target.value)}
                             />
                         </DropdownItem>
                         <DropdownItemCheckbox checked={showHidden} setChecked={setShowHidden}>
@@ -371,6 +361,8 @@ export function DirectoryPage({
         </div>
     );
 }
+
+export const DirectoryPageMemorized = memo(DirectoryPage);
 
 function scrollToAboveScrollable(topElement: Element | undefined): Element | undefined {
     const scrollables = document.querySelectorAll('[data-scrollable=true], [data-scrollable=focus]:focus');

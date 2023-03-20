@@ -1,4 +1,4 @@
-import {Dispatch, useCallback} from 'react';
+import {Dispatch} from 'react';
 import {Input} from 'reactstrap';
 
 export function CheckboxInput({
@@ -23,19 +23,17 @@ export function CheckboxInput({
             disabled={disabled}
             onClick={onClick}
             checked={checked}
-            onChange={useCallback(
-                (ev: React.ChangeEvent<HTMLInputElement>) =>
-                    setParentValue(
-                        [
-                            ...parentValues.slice(0, parentIndex),
-                            '[',
-                            ev.target.checked ? 'x' : ' ',
-                            ']',
-                            ...parentValues.slice(parentIndex + 1),
-                        ].join('')
-                    ),
-                [parentIndex, setParentValue, parentValues]
-            )}
+            onChange={(ev): void =>
+                setParentValue(
+                    [
+                        ...parentValues.slice(0, parentIndex),
+                        '[',
+                        ev.target.checked ? 'x' : ' ',
+                        ']',
+                        ...parentValues.slice(parentIndex + 1),
+                    ].join('')
+                )
+            }
         />
     );
 }

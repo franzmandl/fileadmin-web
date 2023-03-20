@@ -1,17 +1,18 @@
 import classNames from 'classnames';
 import {arrayReplace, focusNothing} from 'common/ReactUtil';
-import {getOriginalIndent, newLine} from 'common/Util';
+import {getOriginalIndent, newLine, resolvePath} from 'common/Util';
 import {Action} from 'components/Action';
 import {AutoResizeTextarea} from 'components/textarea/AutoResizeTextarea';
 import {SetKeyboardControl} from 'components/keyboard-control/KeyboardControl';
-import React, {Fragment, ReactNode, useCallback, useMemo} from 'react';
+import React, {Fragment, ReactNode} from 'react';
 import {Dispatch} from 'react';
 import {CheckboxInput} from './CheckboxInput';
 import './LineComponent.scss';
 import {SuggestionControl} from 'components/textarea/RichTextarea';
 import {tagRegexGrouped, urlRegex, wholeUrlRegex} from 'common/constants';
 
-export type GetAbsoluteUrl = (relativePath: string, isThumbnail: boolean) => string;
+export type GetClientUrl = (path: string) => string;
+export type GetServerUrl = (relativePath: string, isThumbnail: boolean) => string;
 
 export interface LineMeta {
     readonly cursorPosition?: number;
@@ -20,7 +21,10 @@ export interface LineMeta {
 
 export function LineComponent({
     action,
-    getAbsoluteUrl,
+    filterHighlightTags,
+    filterOutputPath,
+    getClientUrl,
+    getServerUrl,
     handleAction,
     setKeyboardControl,
     line,
@@ -32,7 +36,10 @@ export function LineComponent({
     suggestionControl,
 }: {
     readonly action: Action;
-    readonly getAbsoluteUrl: GetAbsoluteUrl;
+    readonly filterHighlightTags: ReadonlySet<string>;
+    readonly filterOutputPath: string | null;
+    readonly getClientUrl: GetClientUrl;
+    readonly getServerUrl: GetServerUrl;
     readonly handleAction: (action: Action, line: string, index: number, cursorPosition: number, handled: () => void) => void;
     readonly setKeyboardControl?: SetKeyboardControl;
     readonly line: string;
@@ -43,27 +50,25 @@ export function LineComponent({
     readonly setParentValue: (value: string, index: number) => void;
     readonly suggestionControl: SuggestionControl;
 }): JSX.Element {
-    const onClick = useCallback(
-        (ev: React.MouseEvent, cursorPosition: number) =>
-            handleAction(action, line, parentIndex, cursorPosition, () => ev.stopPropagation()),
-        [action, handleAction, parentIndex, line]
-    );
+    const onClick = (ev: React.MouseEvent, cursorPosition: number): void =>
+        handleAction(action, line, parentIndex, cursorPosition, () => ev.stopPropagation());
     const disabled = action !== Action.view;
-    const context = useMemo<LineContext>(() => ({disabled, getAbsoluteUrl, onClick}), [disabled, getAbsoluteUrl, onClick]);
-    const setValue = useCallback((value: string) => setParentValue(value, parentIndex), [parentIndex, setParentValue]);
-    const onSaveKeyDown = useCallback(
-        (ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
-            ev.preventDefault();
-            save();
-        },
-        [save]
-    );
+    const context: LineContext = {
+        disabled,
+        filterHighlightTags,
+        filterOutputPath,
+        getClientUrl,
+        getServerUrl,
+        onClick,
+    };
+    const setValue = (value: string): void => setParentValue(value, parentIndex);
+    const onSaveKeyDown = (ev: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+        ev.preventDefault();
+        save();
+    };
     const helper = new Helper(0);
     return (
-        <div
-            className={classNames('text-line', {hoverable: !meta.isEdit && disabled})}
-            onClick={useCallback((ev: React.MouseEvent) => onClick(ev, line.length), [line.length, onClick])}
-        >
+        <div className={classNames('text-line', {hoverable: !meta.isEdit && disabled})} onClick={(ev): void => onClick(ev, line.length)}>
             {meta.isEdit ? (
                 <AutoResizeTextarea
                     cursorPosition={meta.cursorPosition}
@@ -101,7 +106,10 @@ type OnClick = (ev: React.MouseEvent, cursorPosition: number) => void;
 
 interface LineContext {
     readonly disabled: boolean;
-    readonly getAbsoluteUrl: GetAbsoluteUrl;
+    readonly filterHighlightTags: ReadonlySet<string>;
+    readonly filterOutputPath: string | null;
+    readonly getClientUrl: GetClientUrl;
+    readonly getServerUrl: GetServerUrl;
     readonly onClick: OnClick;
 }
 
@@ -122,38 +130,19 @@ function ParsedIndent({
 }): JSX.Element {
     const indent = getOriginalIndent(indentedValue);
     const value = indentedValue.substring(indent.length);
-    const setIndentedValue = useCallback(
-        (nextIndentedValue: string) => {
-            setParentValue(arrayReplace(parentValues, parentIndex, nextIndentedValue).join(newLine));
-        },
-        [parentIndex, parentValues, setParentValue]
-    );
+    const setIndentedValue = (nextIndentedValue: string): void => {
+        setParentValue(arrayReplace(parentValues, parentIndex, nextIndentedValue).join(newLine));
+    };
     return (
         <div
             className={classNames('ps-2 text-line-grid', {'fw-bold': /^#{1,6} /.test(value), 'text-muted': /\[x\]/.test(indent)})}
-            onClick={useCallback((ev: React.MouseEvent) => context.onClick(ev, cursorOffset), [context, cursorOffset])}
+            onClick={(ev): void => context.onClick(ev, cursorOffset)}
         >
             <OnClickDiv cursorOffset={cursorOffset} onClick={context.onClick}>
-                {parseCheckbox(
-                    indent,
-                    useCallback((nextIndent) => setIndentedValue(nextIndent + value), [setIndentedValue, value]),
-                    cursorOffset,
-                    context
-                )}
+                {parseCheckbox(indent, (nextIndent) => setIndentedValue(nextIndent + value), cursorOffset, context)}
             </OnClickDiv>
-            <div
-                className='text-line-column2'
-                onClick={useCallback(
-                    (ev: React.MouseEvent) => context.onClick(ev, cursorOffset + indentedValue.length),
-                    [context, cursorOffset, indentedValue.length]
-                )}
-            >
-                {parseCheckbox(
-                    value,
-                    useCallback((nextValue) => setIndentedValue(indent + nextValue), [setIndentedValue, indent]),
-                    cursorOffset + indent.length,
-                    context
-                )}
+            <div className='text-line-column2' onClick={(ev): void => context.onClick(ev, cursorOffset + indentedValue.length)}>
+                {parseCheckbox(value, (nextValue) => setIndentedValue(indent + nextValue), cursorOffset + indent.length, context)}
             </div>
         </div>
     );
@@ -209,13 +198,13 @@ function parseMarkdownImage(value: string, cursorOffset: number, context: LineCo
                           renderImg(parts[index - 1], part)
                       ) : (
                           <a
-                              href={context.getAbsoluteUrl(part, false)}
+                              href={context.getServerUrl(part, false)}
                               target='_blank'
                               rel='noreferrer'
                               className={classNames({disabled: context.disabled})}
                               onClick={focusNothing}
                           >
-                              {renderImg(parts[index - 1], context.getAbsoluteUrl(part, true))}
+                              {renderImg(parts[index - 1], context.getServerUrl(part, true))}
                           </a>
                       )}
                   </OnClickDiv>,
@@ -239,7 +228,7 @@ function parseMarkdownUrl(value: string, cursorOffset: number, context: LineCont
               helper.wrap(
                   <OnClickSpan key={`${index}${keySuffix}`} cursorOffset={helper.cursorOffset + 1} onClick={context.onClick}>
                       <a
-                          href={wholeUrlRegex.test(part) ? part : context.getAbsoluteUrl(part, false)}
+                          href={wholeUrlRegex.test(part) ? part : context.getServerUrl(part, false)}
                           target='_blank'
                           rel='noreferrer'
                           className={classNames({disabled: context.disabled})}
@@ -282,7 +271,7 @@ function parseFormat(value: string, cursorOffset: number, context: LineContext):
     const keySuffix = 'f';
     const helper = new Helper(cursorOffset);
     // NOTE: Do not forget to adapt getOriginalIndent.
-    return value.split(/(\*{2}.+?\*{2}|~{2}.+?~{2}|\+{2}|-{2}|\([!/?iox ]\))/).map((part, index) =>
+    return value.split(/(\*{2}.+?\*{2}|~{2}.+?~{2}|\+{2}|-{2}|\+-|\([!/?iox ]\))/).map((part, index) =>
         helper.wrap(
             index % 2 === 0 ? (
                 <Fragment key={`${index}${keySuffix}`}>{parseTags(part, helper.cursorOffset, context)}</Fragment>
@@ -303,7 +292,7 @@ function parseFormatHelper(value: string): ReactNode {
         case '~':
             return <s>{value}</s>;
         case '+':
-            return <b className='text-success'>{value}</b>;
+            return <b className={value[1] === '+' ? 'text-success' : ''}>{value}</b>;
         case '-':
             return <b className='text-danger'>{value}</b>;
         case '(':
@@ -328,20 +317,39 @@ function parseFormatHelper(value: string): ReactNode {
 }
 
 function parseTags(value: string, cursorOffset: number, context: LineContext): ReactNode {
-    const keySuffix = 't';
-    const helper = new Helper(cursorOffset);
-    return value.split(tagRegexGrouped).map((part, index) =>
-        helper.wrap(
-            index % 2 === 0 ? (
-                <Fragment key={`${index}${keySuffix}`}>{parseKeywords(part, helper.cursorOffset, context)}</Fragment>
-            ) : (
-                <OnClickSpan key={`${index}${keySuffix}`} className='text-tag' cursorOffset={helper.cursorOffset} onClick={context.onClick}>
-                    {part}
-                </OnClickSpan>
-            ),
-            part.length
-        )
-    );
+    const {filterOutputPath} = context;
+    if (filterOutputPath === null) {
+        return parseKeywords(value, cursorOffset, context);
+    } else {
+        const keySuffix = 't';
+        const helper = new Helper(cursorOffset);
+        return value.split(tagRegexGrouped).map((part, index, parts) =>
+            index % 4 === 0
+                ? helper.wrap(
+                      <Fragment key={`${index}${keySuffix}`}>{parseKeywords(part, helper.cursorOffset, context)}</Fragment>,
+                      part.length
+                  )
+                : index % 4 === 3 &&
+                  // parts[index - 2] = ('#@' = parts[index - 1]) + (parts[index + 2] = part)
+                  helper.wrap(
+                      <OnClickSpan key={`${index}${keySuffix}`} cursorOffset={helper.cursorOffset} onClick={context.onClick}>
+                          {parts[index - 1]}
+                          <a
+                              href={context.getClientUrl(resolvePath(filterOutputPath, part))}
+                              target='_blank'
+                              rel='noreferrer'
+                              className={classNames(context.filterHighlightTags.has(part) ? 'link-warning' : 'link-tag', {
+                                  disabled: context.disabled,
+                              })}
+                              onClick={focusNothing}
+                          >
+                              {part}
+                          </a>
+                      </OnClickSpan>,
+                      parts[index - 2].length
+                  )
+        );
+    }
 }
 
 function parseKeywords(value: string, cursorOffset: number, context: LineContext): ReactNode {
@@ -370,7 +378,7 @@ function parseKeywords(value: string, cursorOffset: number, context: LineContext
     );
 }
 
-function parseKeywordsHelper(value: string) {
+function parseKeywordsHelper(value: string): ReactNode {
     switch (value) {
         case 'NOTE':
             return <span className='text-note'>{value}</span>;
@@ -422,10 +430,7 @@ function OnClickSpan({
 }
 
 function useOnClickCallback(cursorOffset: number, onClick: OnClick) {
-    return useCallback(
-        (ev: React.MouseEvent) => onClick(ev, cursorOffset + getSelectionCharacterOffsetWithin(ev.currentTarget).start),
-        [cursorOffset, onClick]
-    );
+    return (ev: React.MouseEvent): void => onClick(ev, cursorOffset + getSelectionCharacterOffsetWithin(ev.currentTarget).start);
 }
 
 class Helper {
@@ -440,7 +445,7 @@ class Helper {
 /**
  * Taken from https://stackoverflow.com/questions/4811822/get-a-ranges-start-and-end-offsets-relative-to-its-parent-container/4812022#4812022
  */
-function getSelectionCharacterOffsetWithin(element: EventTarget) {
+function getSelectionCharacterOffsetWithin(element: EventTarget): {readonly start: number; readonly end: number} {
     let start = 0;
     let end = 0;
     const doc = (element as any).ownerDocument || (element as any).document;

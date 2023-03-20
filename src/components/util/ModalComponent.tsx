@@ -1,5 +1,5 @@
 import {useDepsEffect} from 'common/ReactUtil';
-import {ReactNode, useCallback, useState} from 'react';
+import {ReactNode, useState} from 'react';
 import {Button, Modal, ModalBody, ModalFooter, ModalHeader} from 'reactstrap';
 import {AppContext} from 'stores/AppContext';
 
@@ -21,7 +21,7 @@ export function ModalComponent({
     useDepsEffect(() => {
         setIsOpen(content !== undefined);
     }, [content]);
-    const closeModal = useCallback(() => setIsOpen(false), []);
+    const closeModal = (): void => setIsOpen(false);
     const footer = content?.renderFooter?.(closeModal);
     return (
         <Modal container={appStore.modalContainerRef} isOpen={isOpen} onClosed={content?.onClosed} fade={false}>
