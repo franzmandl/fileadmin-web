@@ -1,20 +1,19 @@
-import {serverPath, constant} from 'common/constants';
-import {useDepsEffect} from 'common/ReactUtil';
+import {serverPath, constant, hashWordRegex} from 'common/constants';
+import {focusNothing, useDepsEffect} from 'common/ReactUtil';
 import {useDelayed} from 'common/useDelayed';
 import {encodePath, getName} from 'common/Util';
 import {MenuDropdown} from 'components/dropdown/MenuDropdown';
-import {useState} from 'react';
+import React, {useState} from 'react';
 import {Button} from 'reactstrap';
 import {RichTextarea} from 'components/textarea/RichTextarea';
-import {FileContent} from 'model/FileContent';
-import {focusNothing} from 'common/ReactUtil';
+import {FileContent} from 'dto/FileContent';
 import {AppContext} from 'stores/AppContext';
 import {KeyboardControlComponent} from 'components/keyboard-control/KeyboardControlComponent';
 import {KeyboardControl} from 'components/keyboard-control/KeyboardControl';
 import {SaveState} from 'components/file/SaveState';
 import {createSaveIcon} from 'components/file/SaveIcon';
 import {useAsyncCallback} from 'common/useAsyncCallback';
-import {Inode} from 'model/Inode';
+import {Inode} from 'dto/Inode';
 
 interface State {
     readonly saved: SaveState;
@@ -24,14 +23,13 @@ interface State {
 export function FilePage({
     context,
     keyboardControl,
-    path,
 }: {
     readonly context: AppContext;
     readonly keyboardControl: KeyboardControl | undefined;
-    readonly path: string;
-}): JSX.Element {
+}): React.JSX.Element {
     const {appStore, authenticationStore, consoleStore, inodeStore, suggestionStore} = context;
-    const [state, setState] = useState<State>({saved: SaveState.saved, content: {lastModified: 0, value: ''}});
+    const {path} = appStore.appParameter.values;
+    const [state, setState] = useState<State>({saved: SaveState.saved, content: {lastModifiedMilliseconds: 0, value: ''}});
 
     useDepsEffect(() => {
         document.title = `Edit ${getName(path)}`;
@@ -40,7 +38,7 @@ export function FilePage({
     const load = useAsyncCallback(
         () => appStore.indicateLoading(inodeStore.getFile(path)),
         (content) => setState({saved: SaveState.saved, content}),
-        authenticationStore.handleAuthenticationError
+        authenticationStore.handleAuthenticationError,
     );
 
     useDepsEffect(() => void load(), []);
@@ -50,16 +48,17 @@ export function FilePage({
         useAsyncCallback(
             () => {
                 setState(({content}) => ({content, saved: SaveState.saved}));
-                return appStore.preventClose(inodeStore.putFile(path, state.content));
+                return appStore.preventClose(inodeStore.putFile(path, state.content, undefined));
             },
-            ({lastModified}: Inode) => setState(({content, saved}) => ({content: {lastModified, value: content.value}, saved})),
+            ({lastModifiedMilliseconds}: Inode) =>
+                setState(({content, saved}) => ({content: {lastModifiedMilliseconds, value: content.value}, saved})),
             (error: unknown) => {
                 setState(({content}) => ({content, saved: SaveState.failed}));
                 consoleStore.handleError(error);
             },
-            appStore.exitPreventClose
+            appStore.exitPreventClose,
         ),
-        constant.saveTimeoutMs
+        constant.saveTimeoutMs,
     );
 
     const saveNowIfUnsaved = (): void => {
@@ -74,7 +73,7 @@ export function FilePage({
         }
     }, [state]);
 
-    const suggestionControl = suggestionStore.createSuggestionControl(path);
+    const suggestionControl = suggestionStore.createSuggestionControl(path, hashWordRegex);
 
     return (
         <div className='page page-auto'>
@@ -93,7 +92,10 @@ export function FilePage({
                     textareaClassName='h-100 w-100 font-monospace ps-2'
                     value={state.content.value}
                     setValue={(value): void =>
-                        setState((prev) => ({saved: SaveState.waiting, content: {lastModified: prev.content.lastModified, value}}))
+                        setState((prev) => ({
+                            saved: SaveState.waiting,
+                            content: {lastModifiedMilliseconds: prev.content.lastModifiedMilliseconds, value},
+                        }))
                     }
                 />
             </div>
@@ -130,6 +132,7 @@ export function FilePage({
                     </a>
                     <KeyboardControlComponent keyboardControl={keyboardControl} />
                     <MenuDropdown className='page-sidebar-icon'>
+                        {appStore.nowDropdownItem}
                         {appStore.spellCheckDropdownItem}
                         {consoleStore.showConsoleDropdownItem}
                         {authenticationStore.logoutDropdownItem}

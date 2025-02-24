@@ -9,7 +9,7 @@ export function KeyboardControlComponent({
 }: {
     readonly hidden?: boolean;
     readonly keyboardControl: KeyboardControl | undefined;
-}): JSX.Element {
+}): React.JSX.Element {
     return (
         <>
             <CursorButton disabled={keyboardControl === undefined} hidden={hidden} moveCursor={(): void => keyboardControl?.moveCursor(-1)}>
@@ -32,7 +32,7 @@ function CursorButton({
     readonly disabled?: boolean;
     readonly hidden?: boolean;
     readonly moveCursor: () => void;
-}): JSX.Element {
+}): React.JSX.Element {
     const timeoutRef = useRef<NodeJS.Timeout | undefined>();
     useDepsEffect(
         () => () => {
@@ -41,7 +41,7 @@ function CursorButton({
                 clearTimeout(timeoutRef.current);
             }
         },
-        []
+        [],
     );
     const intervalCallback = (): void => {
         moveCursor();

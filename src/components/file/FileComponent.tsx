@@ -1,23 +1,23 @@
 import {serverPath, constant} from 'common/constants';
 import {Ided} from 'common/Ided';
 import {useDelayed} from 'common/useDelayed';
-import {useLatest, useDepsEffect} from 'common/ReactUtil';
-import {alwaysThrow, encodePath, getIndentOfLastLine, identity, newLine, paramsToHash, resolvePath} from 'common/Util';
+import {arrayAdd, arrayRemove, arrayReplace, useLatest, useDepsEffect} from 'common/ReactUtil';
+import {alwaysThrow, encodePath, getIndentOfLastLine, identity, newLine, resolvePath} from 'common/Util';
 import {Action} from 'components/Action';
 import {createSaveIcon} from './SaveIcon';
-import {Inode} from 'model/Inode';
-import {Dispatch, ForwardedRef, forwardRef, useEffect, useImperativeHandle, useRef, useState} from 'react';
-import {LineMeta, LineComponent} from './LineComponent';
-import {FileContent} from 'model/FileContent';
+import {Inode} from 'dto/Inode';
+import React, {Dispatch, ForwardedRef, forwardRef, useImperativeHandle, useRef, useState} from 'react';
+import {LineMeta, LineComponent, OnTagClick} from './LineComponent';
+import {FileContent} from 'dto/FileContent';
 import {TriggerableAction} from 'common/TriggerableAction';
-import {arrayAdd, arrayRemove, arrayReplace} from 'common/ReactUtil';
 import {SaveState} from './SaveState';
 import {useAsyncCallback} from 'common/useAsyncCallback';
 import {SuggestionControl} from 'components/textarea/RichTextarea';
 import {DirectoryPageContext} from 'pages/DirectoryPageContext';
+import {useListener} from 'common/useListener';
 
 interface Lines {
-    readonly lastModified: number | null;
+    readonly lastModifiedMilliseconds?: number;
     readonly saved: SaveState;
     readonly values: ReadonlyArray<Ided<string, LineMeta>>;
 }
@@ -28,11 +28,11 @@ export const FileComponent = forwardRef(function FileComponent(
         context: {
             actionChangeListeners,
             appContext: {appStore, consoleStore, inodeStore},
-            directoryPageParameter,
         },
         filterHighlightTags,
         inode,
         setInode,
+        onTagClick,
         suggestionControl,
     }: {
         readonly action: Action;
@@ -40,12 +40,13 @@ export const FileComponent = forwardRef(function FileComponent(
         readonly filterHighlightTags: ReadonlySet<string>;
         readonly inode: Inode;
         readonly setInode: Dispatch<Inode>;
+        readonly onTagClick: OnTagClick;
         readonly suggestionControl: SuggestionControl;
     },
-    ref: ForwardedRef<TriggerableAction>
-): JSX.Element {
+    forwardedRef: ForwardedRef<TriggerableAction>,
+): React.JSX.Element {
     const lineIdRef = useRef(0);
-    const [lines, setLines] = useState<Lines>({lastModified: null, saved: SaveState.saved, values: []});
+    const [lines, setLines] = useState<Lines>({saved: SaveState.saved, values: []});
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
     const indicateLoading = useAsyncCallback(
@@ -55,9 +56,9 @@ export const FileComponent = forwardRef(function FileComponent(
         },
         identity,
         alwaysThrow,
-        () => setIsLoading(false)
+        () => setIsLoading(false),
     );
-    const loadInode = useAsyncCallback(() => inodeStore.getInode(inode.path), setInode, consoleStore.handleError);
+    const loadInode = useAsyncCallback(() => inodeStore.getInode(inode.path, inode), setInode, consoleStore.handleError);
     const loadPromiseRef = useRef<Promise<FileContent>>();
     const load = useAsyncCallback(
         () => {
@@ -66,15 +67,15 @@ export const FileComponent = forwardRef(function FileComponent(
             loadPromiseRef.current = lineIdRef.current === 0 ? indicateLoading(promise) : appStore.indicateLoading(promise);
             return loadPromiseRef.current;
         },
-        ({lastModified, value}) => {
+        ({lastModifiedMilliseconds, value}) => {
             setLines({
-                lastModified,
+                lastModifiedMilliseconds,
                 saved: SaveState.saved,
                 values: value.split(newLine).map((data) => ({id: `${lineIdRef.current++}`, data, meta: {isEdit: false}})),
             });
             loadPromiseRef.current = undefined;
         },
-        consoleStore.handleError
+        consoleStore.handleError,
     );
 
     useDepsEffect(() => {
@@ -87,20 +88,30 @@ export const FileComponent = forwardRef(function FileComponent(
         useAsyncCallback(
             () => {
                 const value = lines.values.map(({data}) => data).join(newLine);
-                setLines(({lastModified, values}) => ({lastModified, saved: SaveState.saved, values})); // Must use prev.
-                return appStore.preventClose(inodeStore.putFile(inode.path, {lastModified: lines.lastModified, value}));
+                setLines(({lastModifiedMilliseconds, values}) => ({
+                    lastModifiedMilliseconds,
+                    saved: SaveState.saved,
+                    values,
+                })); // Must use prev.
+                return appStore.preventClose(
+                    inodeStore.putFile(inode.path, {lastModifiedMilliseconds: lines.lastModifiedMilliseconds, value}, inode),
+                );
             },
             (newInode) => {
                 setInode(newInode);
-                setLines(({saved, values}) => ({lastModified: newInode.lastModified, saved, values})); // Must use prev.
+                setLines(({saved, values}) => ({lastModifiedMilliseconds: newInode.lastModifiedMilliseconds, saved, values})); // Must use prev.
             },
             (error) => {
-                setLines(({lastModified, values}) => ({lastModified, saved: SaveState.failed, values})); // Must use prev.
+                setLines(({lastModifiedMilliseconds, values}) => ({
+                    lastModifiedMilliseconds,
+                    saved: SaveState.failed,
+                    values,
+                })); // Must use prev.
                 consoleStore.handleError(error);
             },
-            appStore.exitPreventClose
+            appStore.exitPreventClose,
         ),
-        constant.saveTimeoutMs
+        constant.saveTimeoutMs,
     );
 
     const saveNowIfUnsaved = (): void => {
@@ -122,18 +133,18 @@ export const FileComponent = forwardRef(function FileComponent(
         }
     }, [action]);
 
-    const getClientUrl = (path: string): string => paramsToHash(directoryPageParameter.getEncodedPath(path));
     const getServerUrl = (relativePath: string, isThumbnail: boolean): string => {
         const encodedPath = encodePath(resolvePath(inode.realParentPath, relativePath));
-        return isThumbnail ? serverPath.authenticatedPath.thumbnail(encodedPath, 360) : serverPath.authenticatedPath.file(encodedPath);
+        return isThumbnail
+            ? serverPath.authenticatedPath.fileConvertImageToImage(encodedPath, constant.markdownImageDimension)
+            : serverPath.authenticatedPath.file(encodedPath);
     };
 
-    // Uses useEffect instead of useDepsEffect on purpose to remind potential future dependencies.
-    useEffect(() => {
-        const onActionChange = (nextAction: Action, prevAction: Action): void => {
-            setLines(({lastModified, saved, values}) => ({
+    useListener(
+        (nextAction: Action, prevAction: Action): void => {
+            setLines(({lastModifiedMilliseconds, saved, values}) => ({
                 // Must use prev.
-                lastModified,
+                lastModifiedMilliseconds,
                 saved,
                 values: values.map(({id, data, meta: {isEdit, ...meta}}) => ({
                     id,
@@ -141,20 +152,21 @@ export const FileComponent = forwardRef(function FileComponent(
                     meta: {...meta, isEdit: isEdit && nextAction === Action.edit && nextAction !== prevAction},
                 })),
             }));
-        };
-        actionChangeListeners.add(onActionChange);
-        return () => actionChangeListeners.remove(onActionChange);
-    }, [actionChangeListeners]);
+        },
+        (listener): void => actionChangeListeners.add(listener),
+        (listener): void => actionChangeListeners.remove(listener),
+        [actionChangeListeners],
+    );
 
     const addLine = useAsyncCallback<unknown, [number], void>(
         () => loadPromiseRef.current,
         (_, index) =>
-            setLines(({lastModified, values}) => {
+            setLines(({lastModifiedMilliseconds, values}) => {
                 // Must use prev.
                 const indent = getIndentOfLastLine(values[index]?.data ?? '');
                 const cursorPosition = indent.length;
                 return {
-                    lastModified,
+                    lastModifiedMilliseconds,
                     saved: SaveState.waiting,
                     values: mergeIsEditLines(
                         arrayAdd(values, index + 1, {
@@ -163,17 +175,17 @@ export const FileComponent = forwardRef(function FileComponent(
                             meta: {/* cursorPosition gets set by mergeIsEditLines. */ isEdit: true},
                         }),
                         index + 1,
-                        cursorPosition
+                        cursorPosition,
                     ),
                 };
             }),
-        consoleStore.handleError
+        consoleStore.handleError,
     );
 
     const setIsEditTrue = (index: number, cursorPosition: number): void => {
-        setLines(({lastModified, saved, values}) => ({
+        setLines(({lastModifiedMilliseconds, saved, values}) => ({
             // Must use prev.
-            lastModified,
+            lastModifiedMilliseconds,
             saved,
             values: mergeIsEditLines(values, index, cursorPosition),
         }));
@@ -182,13 +194,13 @@ export const FileComponent = forwardRef(function FileComponent(
     const setLineValue = useAsyncCallback<unknown, [string, number], void>(
         () => loadPromiseRef.current,
         (_, data, index) =>
-            setLines(({lastModified, values}) => ({
+            setLines(({lastModifiedMilliseconds, values}) => ({
                 // Must use prev.
-                lastModified,
+                lastModifiedMilliseconds,
                 saved: SaveState.waiting,
                 values: arrayReplace(values, index, {...values[index], data}),
             })),
-        consoleStore.handleError
+        consoleStore.handleError,
     );
 
     const deleteLine = useAsyncCallback<boolean, [string, number], void>(
@@ -196,15 +208,15 @@ export const FileComponent = forwardRef(function FileComponent(
             appStore.confirm(
                 <>
                     Deleting line: <pre className='overflow-auto'>{line}</pre>
-                </>
+                </>,
             ),
         (value, _, index) => (value ? deleteLineImmediately(index) : undefined),
-        consoleStore.handleError
+        consoleStore.handleError,
     );
     const deleteLineImmediately = useAsyncCallback<unknown, [number], void>(
         () => loadPromiseRef.current,
         (_, index) =>
-            setLines(({lastModified, values}) => {
+            setLines(({lastModifiedMilliseconds, values}) => {
                 // Must use prev.
                 // There should always be at least one value in values.
                 const nextValues = arrayRemove(values, index);
@@ -212,12 +224,12 @@ export const FileComponent = forwardRef(function FileComponent(
                     nextValues.push({id: `${lineIdRef.current++}`, data: '', meta: {isEdit: false}});
                 }
                 return {
-                    lastModified,
+                    lastModifiedMilliseconds,
                     saved: SaveState.waiting,
                     values: nextValues,
                 };
             }),
-        consoleStore.handleError
+        consoleStore.handleError,
     );
 
     const handleParentActionRef = useLatest((localAction: Action, index: number, handled: () => void) => {
@@ -231,11 +243,11 @@ export const FileComponent = forwardRef(function FileComponent(
     });
 
     useImperativeHandle(
-        ref,
+        forwardedRef,
         () => ({
             triggerAction: (localAction, handled) => handleParentActionRef.current(localAction, -1, handled),
         }),
-        [handleParentActionRef]
+        [handleParentActionRef],
     );
 
     const handleAction = (localAction: Action, line: string, index: number, cursorPosition: number, handled: () => void): void => {
@@ -261,13 +273,12 @@ export const FileComponent = forwardRef(function FileComponent(
                     key={id}
                     action={action}
                     filterHighlightTags={filterHighlightTags}
-                    filterOutputPath={inode.filterOutputPath}
-                    getClientUrl={getClientUrl}
                     getServerUrl={getServerUrl}
                     handleAction={handleAction}
                     setKeyboardControl={appStore.setKeyboardControl}
                     line={data}
                     meta={meta}
+                    onTagClick={onTagClick}
                     parentIndex={index}
                     save={saveNowIfUnsaved}
                     spellCheck={appStore.appParameter.values.spellCheck}
@@ -282,7 +293,7 @@ export const FileComponent = forwardRef(function FileComponent(
 function mergeIsEditLines(
     values: ReadonlyArray<Ided<string, LineMeta>>,
     editIndex: number,
-    editCursorPosition: number
+    editCursorPosition: number,
 ): ReadonlyArray<Ided<string, LineMeta>> {
     const result: Ided<string, LineMeta>[] = [];
     let cursorPosition: number | undefined;

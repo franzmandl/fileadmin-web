@@ -2,5 +2,5 @@
 
 .dropdown-item-checkbox {
     cursor: pointer;
-    padding: $dropdown-item-padding-y / 2 $dropdown-item-padding-x;
+    padding: calc($dropdown-item-padding-y / 2) $dropdown-item-padding-x;
 }

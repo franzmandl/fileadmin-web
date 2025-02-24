@@ -17,6 +17,8 @@ $list-group-bg: $modal-content-bg;
 
 $backdrop-bg: rgba(0, 0, 0, $modal-backdrop-opacity);
 $firefox-scrollbar-color: #8b8b8b;
+$link-tag-color: #9c9c9c;
+$link-tag-match-color: $warning;
 $mobile-breakpoint: map-get($grid-breakpoints, md);
 $outline-focus-color: #333;
 $same-color-as-hr: #3f3f3f; // Sampled from hr.

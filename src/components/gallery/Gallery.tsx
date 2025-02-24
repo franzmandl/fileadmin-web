@@ -1,35 +1,37 @@
-import {serverPath} from 'common/constants';
+import {AppLocation, ParamName, hashWordRegex} from 'common/constants';
 import {addAroundIndex, getNextIndex, getPrevIndex, HasLength} from 'common/HasLength';
-import {arrayRemove, arrayReplace, focusNothing, useDepsEffect, useDepsLayoutEffect} from 'common/ReactUtil';
-import {useLatest, useSanitizedValue} from 'common/ReactUtil';
+import {arrayRemove, arrayReplace, focusNothing, useDepsEffect, useDepsLayoutEffect, useSanitizedValue} from 'common/ReactUtil';
 import {useAsyncCallback} from 'common/useAsyncCallback';
-import {nameAllowSlashRegex, encodePath, isAnyType, mod, Type} from 'common/Util';
-import {Inode} from 'model/Inode';
+import {nameAllowSlashRegex, mod, paramsToHash, setParam, deleteParam, ifMinusOne} from 'common/Util';
+import {Inode, createClipboardId, createClipboardItem, getDownloadPath} from 'dto/Inode';
 import React, {Dispatch, useState} from 'react';
 import {Button} from 'reactstrap';
 import {AppContext} from 'stores/AppContext';
-import {ReadonlySet} from 'typescript';
 import {AutoResizeTextarea} from 'components/textarea/AutoResizeTextarea';
 import './Gallery.scss';
 import {GalleryControl} from './GalleryControl';
 import {KeyboardControl} from 'components/keyboard-control/KeyboardControl';
 import {KeyboardControlComponent} from 'components/keyboard-control/KeyboardControlComponent';
 import {MenuDropdown} from 'components/dropdown/MenuDropdown';
+import {useMove} from 'components/inode/useMove';
+import {useListener} from 'common/useListener';
+import {InodeDropdown} from 'components/inode/InodeDropdown';
 
 export function Gallery({
     context,
     galleryControl,
     keyboardControl,
+    isLoggedIn,
 }: {
     readonly context: AppContext;
     readonly galleryControl: GalleryControl;
+    readonly isLoggedIn: boolean;
     readonly keyboardControl: KeyboardControl | undefined;
-}): JSX.Element {
-    const {appStore, authenticationStore, consoleStore, galleryStore, inodeStore, suggestionStore} = context;
+}): React.JSX.Element {
+    const {appStore, authenticationStore, consoleStore, galleryStore, inodeEventBus, inodeStore, suggestionStore} = context;
     const [currentIndex, setCurrentIndex] = useState<number>(galleryControl.index);
     const [inodes, setInodes] = useState<ReadonlyArray<Inode>>(galleryControl.inodes);
     const currentInode: Inode | undefined = inodes[currentIndex];
-    const currentHref = currentInode !== undefined ? serverPath.authenticatedPath.file(encodePath(currentInode.path)) : undefined;
     const [newName, setNewName] = useState<string>('');
     const oldName = currentInode?.name ?? '';
     useDepsLayoutEffect(() => setNewName(oldName), [oldName]);
@@ -54,106 +56,115 @@ export function Gallery({
                 : appStore.confirm(
                       <>
                           Deleting inode: <pre className='overflow-auto'>{currentInode.name}</pre>
-                      </>
+                      </>,
                   ),
         (value) => (value ? deleteImmediately() : undefined),
-        consoleStore.handleError
+        consoleStore.handleError,
     );
     const deleteImmediately = useAsyncCallback(
         () => appStore.indicateLoading(appStore.preventClose(inodeStore.delete(currentInode))),
         () => {
             setInodes((prev) => arrayRemove(prev, currentIndex));
             setCurrentIndex((prev) => Math.max(0, prev - 1));
-            galleryControl.onEvent({_type: 'delete', oldInode: currentInode});
+            inodeEventBus.fire(currentInode.parentPath, {_type: 'delete', path: currentInode.path});
         },
-        consoleStore.handleError
+        consoleStore.handleError,
     );
 
-    const moveImmediately = useAsyncCallback(
-        () => appStore.indicateLoading(appStore.preventClose(inodeStore.move(currentInode, newName))),
-        (newInode) => {
+    const moveImmediately = useMove({
+        context,
+        newParentPath: currentInode.parentPath,
+        oldPath: currentInode.path,
+        onMove: (newInode) => {
             setInodes((prev) => arrayReplace(prev, currentIndex, newInode));
-            galleryControl.onEvent({_type: 'move', newInode, oldInode: currentInode});
+            inodeEventBus.fireMove(newInode, currentInode.path, currentInode.parentPath);
         },
-        consoleStore.handleError
-    );
+    });
     const move = (): void => {
         if (cannotMoveToNewName) {
             return;
         }
-        moveImmediately();
+        moveImmediately(newName);
     };
 
     const onSaveKeyDown = (ev: React.KeyboardEvent<HTMLTextAreaElement>): void => {
         ev.preventDefault();
         move();
+        focusNothing();
     };
 
     const prevImage = (): void => loadIndex(getPrevIndex(inodes, currentIndex));
     const nextImage = (): void => loadIndex(getNextIndex(inodes, currentIndex));
     const rotateClockwise = (): void => setRotateDeg((prev) => mod(prev + 90, 360));
     const rotateCounterclockwise = (): void => setRotateDeg((prev) => mod(prev - 90, 360));
+    const [cursorPosition, setCursorPosition] = useState<number>();
 
-    const onKeyDownRef = useLatest((ev: KeyboardEvent): boolean => {
-        if (ev.target === document.body) {
-            switch (ev.key) {
-                case 'ArrowLeft':
-                case 'a':
-                    ev.preventDefault();
-                    prevImage();
-                    break;
-                case 'ArrowRight':
-                case 'd':
-                    ev.preventDefault();
-                    nextImage();
-                    break;
-                case 'ArrowUp':
-                case 'w':
-                    ev.preventDefault();
-                    rotateClockwise();
-                    break;
-                case 'ArrowDown':
-                case 's':
-                    ev.preventDefault();
-                    rotateCounterclockwise();
-                    break;
-                case 'Delete':
-                    ev.preventDefault();
-                    delete_();
-                    break;
-                case 'Escape':
-                    ev.preventDefault();
-                    onClose();
-                    break;
+    useListener(
+        (ev: KeyboardEvent): boolean => {
+            if (ev.target === document.body) {
+                switch (ev.key) {
+                    case 'ArrowLeft':
+                    case 'a':
+                        ev.preventDefault();
+                        prevImage();
+                        break;
+                    case 'ArrowRight':
+                    case 'd':
+                        ev.preventDefault();
+                        nextImage();
+                        break;
+                    case 'ArrowUp':
+                    case 'w':
+                        ev.preventDefault();
+                        rotateClockwise();
+                        break;
+                    case 'ArrowDown':
+                    case 's':
+                        ev.preventDefault();
+                        rotateCounterclockwise();
+                        break;
+                    case 'e':
+                    case 'F2':
+                        ev.preventDefault();
+                        setCursorPosition(ifMinusOne(newName.lastIndexOf('.'), newName.length));
+                        break;
+                    case 'Delete':
+                        ev.preventDefault();
+                        delete_();
+                        break;
+                    case 'Escape':
+                        ev.preventDefault();
+                        onClose();
+                        break;
+                }
+            } else if (ev.key === 'Escape') {
+                focusNothing();
             }
-        }
-        return true;
-    });
+            return true;
+        },
+        (listener): void => appStore.keyDownListeners.add(listener),
+        (listener): void => appStore.keyDownListeners.remove(listener),
+        [appStore.keyDownListeners],
+    );
 
-    useDepsEffect(() => {
-        const listener = (ev: KeyboardEvent): boolean => onKeyDownRef.current(ev);
-        appStore.keyDownListeners.add(listener);
-        return () => appStore.keyDownListeners.remove(listener);
-    }, [appStore.keyDownListeners]);
+    const suggestionControl = suggestionStore.createSuggestionControl(currentInode?.path, hashWordRegex);
 
-    const suggestionControl = suggestionStore.createSuggestionControl(currentInode?.path);
+    const createHref = (path: string): string =>
+        paramsToHash(
+            deleteParam(setParam(appStore.appParameter.getEncodedLocation(AppLocation.inodes), ParamName.path, path), ParamName.gallery),
+        );
 
     return (
-        <div className='gallery page page-auto'>
+        <div className='gallery page page-auto' hidden={!isLoggedIn}>
             <div className={`page-main ${backgroundColorClassNames[backgroundColorClassNameIndex]}`}>
                 <div className='gallery-main'>
                     {inodes.map((inode, index) => {
                         if (!isLoaded(index)) {
                             return;
                         }
-                        if (isAnyType(inode.type, Type.image)) {
+                        if (inode.imageUrl !== null) {
                             return (
-                                <img
-                                    key={index}
-                                    className={`rotate-${rotateDeg}`}
-                                    hidden={index !== currentIndex}
-                                    src={serverPath.authenticatedPath.file(encodePath(inode.path))}
-                                />
+                                <img key={index} className={`rotate-${rotateDeg}`} hidden={index !== currentIndex} src={inode.imageUrl} />
                             );
                         }
                     })}
@@ -182,6 +193,8 @@ export function Gallery({
                 </div>
                 <div className='gallery-bottom'>
                     <AutoResizeTextarea
+                        cursorPosition={cursorPosition}
+                        setCursorPosition={setCursorPosition}
                         setKeyboardControl={appStore.setKeyboardControl}
                         onCtrlSKeyDown={onSaveKeyDown}
                         onEnterKeyDown={onSaveKeyDown}
@@ -196,39 +209,24 @@ export function Gallery({
             <div className='page-sidebar'>
                 <div>
                     <Button
-                        className='page-sidebar-icon'
-                        color='success'
-                        disabled={cannotMoveToNewName}
-                        onClick={(): void => {
-                            focusNothing();
-                            move();
-                        }}
-                    >
-                        <span className='mdi mdi-content-save-outline' />
-                    </Button>
-                    <Button
-                        className='page-sidebar-icon'
-                        color='warning'
-                        onClick={(): void => {
-                            focusNothing();
-                            rotateCounterclockwise();
-                        }}
-                    >
-                        <span className='mdi mdi-rotate-left' />
-                    </Button>
-                    <Button
-                        className='page-sidebar-icon'
+                        className='page-sidebar-icon mdi mdi-contrast-circle'
                         color='light'
                         onClick={(): void => {
                             focusNothing();
                             setBackgroundColorClassNameIndex((prev) => mod(prev + 1, backgroundColorClassNames.length));
                         }}
-                    >
-                        <span className='mdi mdi-contrast-circle' />
-                    </Button>
+                    />
+                    <Button
+                        className='page-sidebar-icon mdi mdi-rotate-left'
+                        color='warning'
+                        onClick={(): void => {
+                            focusNothing();
+                            rotateCounterclockwise();
+                        }}
+                    />
                     <a
                         className='page-sidebar-icon btn btn-secondary'
-                        href={currentHref}
+                        href={getDownloadPath(currentInode)}
                         role='button'
                         target='_blank'
                         rel='noreferrer'
@@ -237,15 +235,23 @@ export function Gallery({
                         <span className='mdi mdi-download' />
                     </a>
                     <Button
-                        className='page-sidebar-icon'
-                        color='danger'
+                        className='page-sidebar-icon mdi mdi-content-save-outline'
+                        color='success'
+                        disabled={cannotMoveToNewName}
                         onClick={(): void => {
                             focusNothing();
-                            delete_();
+                            move();
                         }}
-                    >
-                        <span className='mdi mdi-trash-can' />
-                    </Button>
+                    />
+                    <InodeDropdown
+                        className='page-sidebar-icon'
+                        context={context}
+                        container={'body'}
+                        createHref={createHref}
+                        cut={(): void => context.clipboardStore.cut(createClipboardId(currentInode), createClipboardItem(currentInode))}
+                        delete_={delete_}
+                        inode={currentInode}
+                    />
                     <KeyboardControlComponent keyboardControl={keyboardControl} />
                     <MenuDropdown className='page-sidebar-icon'>
                         {appStore.spellCheckDropdownItem}
@@ -263,7 +269,7 @@ const backgroundColorClassNames = ['', 'bg-black', 'bg-white'];
 function useLoadedIndices(
     currentIndex: number,
     setCurrentIndex: Dispatch<number>,
-    hasLength: HasLength
+    hasLength: HasLength,
 ): {
     readonly isLoaded: (index: number) => boolean;
     readonly loadIndex: (index: number) => void;
@@ -272,13 +278,7 @@ function useLoadedIndices(
     useDepsEffect(() => setLoadedIndices(addAroundIndex(new Set<number>(), hasLength, currentIndex)), [hasLength]);
     const loadIndex = (index: number): void => {
         setCurrentIndex(index);
-        setLoadedIndices((prev) =>
-            addAroundIndex(
-                new Set<number>(prev as Set<number> /* ReadonlySet is not iterable for some reason, but Set is. */),
-                hasLength,
-                index
-            )
-        );
+        setLoadedIndices((prev) => addAroundIndex(new Set<number>(prev), hasLength, index));
     };
     const isLoaded = (index: number): boolean => loadedIndices.has(index);
     return {isLoaded, loadIndex};

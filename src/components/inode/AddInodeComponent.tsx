@@ -1,12 +1,12 @@
-import {focusNothing, stopPropagation, useDepsLayoutEffect} from 'common/ReactUtil';
-import {useSanitizedValue} from 'common/ReactUtil';
-import {expressionToTimestampPrecision, formatTimestamp, windowsNameRegex} from 'common/Util';
-import {NewInode} from 'model/NewInode';
+import {focusNothing, stopPropagation, useDepsLayoutEffect, useSanitizedValue} from 'common/ReactUtil';
+import {expressionToTimestampPrecision, formatTimestamp, getFileEnding, removeFileEnding, windowsNameRegex} from 'common/Util';
+import {NewInode} from 'dto/NewInode';
 import React, {useState} from 'react';
 import {Button} from 'reactstrap';
 import {AutoResizeTextarea} from 'components/textarea/AutoResizeTextarea';
 import {SetKeyboardControl} from 'components/keyboard-control/KeyboardControl';
 import {SuggestionControl} from 'components/textarea/RichTextarea';
+import './AddInodeComponent.scss';
 
 export function AddInodeComponent({
     addInodeAfterIndex,
@@ -18,14 +18,15 @@ export function AddInodeComponent({
     suggestionControl,
 }: {
     readonly addInodeAfterIndex: number;
-    readonly nameCursorPosition: number | null;
+    readonly nameCursorPosition?: number;
     readonly setKeyboardControl: SetKeyboardControl;
     readonly newInodeTemplate: NewInode;
     readonly onAdd: (newInode: NewInode, addInodeAfterIndex: number) => void;
     readonly spellCheck: boolean;
     readonly suggestionControl: SuggestionControl;
-}): JSX.Element {
+}): React.JSX.Element {
     const [evaluatedName, evaluatedCursorPosition] = evaluateName(newInodeTemplate.name, nameCursorPosition);
+    const evaluatedEnding = getFileEnding(evaluatedName);
     const [cursorPosition, setCursorPosition] = useState<number | undefined>(evaluatedCursorPosition);
     const [isFile, setIsFile] = useState<boolean>(newInodeTemplate.isFile);
     const [name, setName] = useSanitizedValue(useState<string>(evaluatedName), windowsNameRegex);
@@ -50,7 +51,7 @@ export function AddInodeComponent({
     };
 
     return (
-        <div style={{display: 'grid', gridTemplateColumns: '1fr auto auto'}} onClick={stopPropagation}>
+        <div className='add-inode-component' onClick={stopPropagation}>
             <AutoResizeTextarea
                 cursorPosition={cursorPosition}
                 setCursorPosition={setCursorPosition}
@@ -59,7 +60,7 @@ export function AddInodeComponent({
                 onEnterKeyDown={onSaveKeyDown}
                 spellCheck={spellCheck}
                 suggestionControl={suggestionControl}
-                textareaClassName='font-monospace'
+                textareaClassName='bg-transparent font-monospace ps-2'
                 value={name}
                 setValue={setName}
             />
@@ -68,7 +69,15 @@ export function AddInodeComponent({
                 onClick={(ev): void => {
                     ev.stopPropagation();
                     focusNothing();
-                    setIsFile((prev) => !prev);
+                    const nextIsFile = !isFile;
+                    setIsFile(nextIsFile);
+                    if (nextIsFile) {
+                        if (!name.endsWith(evaluatedEnding)) {
+                            setName(name + evaluatedEnding);
+                        }
+                    } else {
+                        setName(removeFileEnding(name));
+                    }
                 }}
             >
                 <span className={`mdi ${isFile ? 'mdi-file' : 'mdi-folder'}`} />
@@ -88,12 +97,12 @@ export function AddInodeComponent({
     );
 }
 
-function evaluateName(name: string, nameCursorPosition: number | null): [string, number | undefined] {
+function evaluateName(name: string, nameCursorPosition: number | undefined): [string, number | undefined] {
     const currentDate = new Date();
     let currentPosition = 0;
     let cursorPosition: number | undefined;
     const evaluatedName = name
-        .split(/<([^>]*)>/)
+        .split(/<(.*?)>/)
         .map((part, index) => {
             if (index % 2 === 0) {
                 return incrementCursorPosition(part);
@@ -118,8 +127,8 @@ function evaluateName(name: string, nameCursorPosition: number | null): [string,
     }
 }
 
-function getAlternativeCursorPosition(nameCursorPosition: number | null, length: number): number {
-    if (nameCursorPosition === null) {
+function getAlternativeCursorPosition(nameCursorPosition: number | undefined, length: number): number {
+    if (nameCursorPosition === undefined) {
         return length;
     } else if (nameCursorPosition < 0) {
         return length - nameCursorPosition;

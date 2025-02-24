@@ -1,22 +1,25 @@
-import {Dispatch, ForwardedRef, forwardRef, Fragment, useImperativeHandle, useRef, useState} from 'react';
-import {Inode} from 'model/Inode';
-import {alwaysThrow, assertUnreachable, getName, identity, isAnyType, Type} from 'common/Util';
+import React, {Dispatch, ForwardedRef, forwardRef, Fragment, useImperativeHandle, useRef, useState} from 'react';
+import {createClipboardId, createClipboardItem, Inode} from 'dto/Inode';
+import {alwaysThrow, arrayRemoveInPlace, arrayReplaceInPlace, assertUnreachable, getName, identity, isAnyType, Type} from 'common/Util';
 import {InodeComponent, InodeMeta} from './InodeComponent';
 import {AddInodeComponent} from './AddInodeComponent';
 import {Action} from 'components/Action';
 import {Ided} from 'common/Ided';
 import {DirectoryBreadcrumb} from './DirectoryBreadcrumb';
-import {NewInode} from 'model/NewInode';
+import {NewInode} from 'dto/NewInode';
 import {TriggerableAction} from 'common/TriggerableAction';
-import {arrayAdd, arrayRemove, arrayReplace, useConditionalEffect, useDepsEffect} from 'common/ReactUtil';
-import {GalleryEvent} from 'components/gallery/GalleryControl';
-import {useLatest} from 'common/ReactUtil';
+import {arrayAdd, stopPropagation, useConditionalEffect, useDepsEffect, useLatest} from 'common/ReactUtil';
 import {DirectoryPageContext} from 'pages/DirectoryPageContext';
 import {useAsyncCallback} from 'common/useAsyncCallback';
-import {Directory} from 'model/Directory';
+import {Directory} from 'dto/Directory';
 import {SuggestionControl} from 'components/textarea/RichTextarea';
 import {MoveInodeComponent} from './MoveInodeComponent';
 import {useMove} from './useMove';
+import {usePagination} from 'components/util/usePagination';
+import {constant} from 'common/constants';
+import {InodeEvent} from 'stores/InodeEventBus';
+import {useListener} from 'common/useListener';
+import {compare} from 'common/CompareInode';
 
 export const DirectoryComponent = forwardRef(function DirectoryComponent(
     {
@@ -26,8 +29,9 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
         decentDirectory,
         filterHighlightTags,
         inode,
-        isFirstLevel,
         setInode,
+        isFirstLevel,
+        onDirectoryChange,
         setIsReady,
         onMove,
         path,
@@ -37,23 +41,24 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
         readonly className?: string;
         readonly context: DirectoryPageContext;
         readonly decentDirectory: boolean;
-        readonly filterHighlightTags: ReadonlySet<string> | null;
+        readonly filterHighlightTags?: ReadonlySet<string>;
         readonly inode: Inode;
-        readonly isFirstLevel: boolean;
         readonly setInode: Dispatch<Inode>;
+        readonly isFirstLevel: boolean;
         readonly setIsReady?: Dispatch<boolean>;
+        readonly onDirectoryChange?: Dispatch<Directory | undefined>;
         readonly onMove: (newInode: Inode) => void;
         readonly path: string;
         readonly suggestionControl: SuggestionControl;
     },
-    ref: ForwardedRef<TriggerableAction>
-): JSX.Element {
-    const {comparator, appContext, directoryPageParameter} = context;
-    const {appStore, authenticationStore, consoleStore, galleryStore, inodeStore} = appContext;
-    const {action} = directoryPageParameter.values;
+    forwardedRef: ForwardedRef<TriggerableAction>,
+): React.JSX.Element {
+    const {appContext, directoryPageParameter} = context;
+    const {appStore, authenticationStore, clipboardStore, consoleStore, galleryStore, inodeEventBus, inodeStore} = appContext;
+    const {action, compareParameter, pageSize} = directoryPageParameter.values;
     const [addInodeAfterIndex, setAddInodeAfterIndex] = useState<number>();
-    const [addInodeParent, setAddInodeParent] = useState<string>(path);
-    const [idedInodes, setIdedInodes] = useState<ReadonlyArray<Ided<Inode, InodeMeta>>>([]);
+    const [addInodeParent, setAddInodeParent] = useState<string>(inode.realPath);
+    const [idedInodes, setIdedInodes] = useState<IdedInodes>([]);
     const [isEdit, setIsEdit] = useState<boolean>(false);
     const inodeIdRef = useRef(0);
     const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -64,40 +69,66 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
     }, [action]);
     const [directory, setDirectory] = useState<Directory>();
 
-    const onInodeChange = (data: Inode, meta: InodeMeta, id: string, index: number): void => {
-        setIdedInodes((prev) => arrayReplace(prev, index, {id, data, meta}));
+    const idedInodesErrorsRef = useRef<React.ReactNode[]>([]);
+    useDepsEffect(() => {
+        idedInodesErrorsRef.current.forEach(consoleStore.logError);
+        idedInodesErrorsRef.current = [];
+    }, [idedInodes]);
+
+    const onInodeChange = (inode: Inode, findInodeIndex: FindInodeIndex): void => {
+        setIdedInodes((prev) => {
+            const next = [...prev];
+            const index = findInodeIndex.find(next);
+            if (index === undefined) {
+                idedInodesErrorsRef.current.push('onInodeChange: Unable to find inode. Details: ' + findInodeIndex.details);
+                return next;
+            }
+            return arrayReplaceInPlace(next, index, {...next[index], data: inode});
+        });
     };
 
-    const loadInode = useAsyncCallback(() => inodeStore.getInode(path), setInode, consoleStore.handleError);
+    const loadInode = useAsyncCallback(() => inodeStore.getInode(path, inode), setInode, consoleStore.handleError);
 
-    const onInodeDelete = (oldInode: Inode, index: number): void => {
-        setIdedInodes(arrayRemove(idedInodes, index));
+    const onInodeAdd = (inode: Inode, index: number, showContent: boolean): void => {
+        setIdedInodes((prev) => arrayAdd(prev, index, {id: `${inodeIdRef.current++}`, data: inode, meta: {showContent}}));
         loadInode();
     };
 
-    const onInodeMove = (newInode: Inode, oldInode: Inode, meta: InodeMeta, id: string, index: number): void => {
-        const nextIdedInodes = [...idedInodes];
-        if (newInode.parentPath === oldInode.parentPath) {
-            nextIdedInodes.splice(index, 1, {id, data: newInode, meta});
-        } else {
-            nextIdedInodes.splice(index, 1);
-        }
-        setIdedInodes(nextIdedInodes);
+    const onInodeDelete = (findInodeIndex: FindInodeIndex): void => {
+        setIdedInodes((prev) => {
+            const next = [...prev];
+            const index = findInodeIndex.find(next);
+            if (index === undefined) {
+                idedInodesErrorsRef.current.push('onInodeDelete: Unable to find inode. Details: ' + findInodeIndex.details);
+                return next;
+            }
+            return arrayRemoveInPlace(next, index);
+        });
+        loadInode();
+    };
+
+    const onInodeMove = (newInode: Inode, oldInode: Inode, findInodeIndex: FindInodeIndex): void => {
+        setIdedInodes((prev) => {
+            const next = [...prev];
+            const index = findInodeIndex.find(next);
+            if (index === undefined) {
+                idedInodesErrorsRef.current.push('onInodeMove: Unable to find inode. Details: ' + findInodeIndex.details);
+                return next;
+            }
+            if (newInode.parentPath === oldInode.parentPath) {
+                arrayReplaceInPlace(next, index, {...next[index], data: newInode});
+            } else {
+                arrayRemoveInPlace(next, index);
+            }
+            return next;
+        });
         loadInode();
     };
 
     const add = useAsyncCallback<Inode, [NewInode, number], void>(
         (newInode) => appStore.indicateLoading(appStore.preventClose(inodeStore.add(addInodeParent, newInode))),
-        (data, _, localAddInodeAfterIndex) => {
-            const addedIdedInode: Ided<Inode, InodeMeta> = {
-                id: `${inodeIdRef.current++}`,
-                data,
-                meta: {showContent: true},
-            };
-            setIdedInodes(arrayAdd(idedInodes, localAddInodeAfterIndex + 1, addedIdedInode));
-            loadInode();
-        },
-        consoleStore.handleError
+        (data, _, localAddInodeAfterIndex) => onInodeAdd(data, localAddInodeAfterIndex + 1, true),
+        consoleStore.handleError,
     );
 
     const indicateLoading = useAsyncCallback(
@@ -107,64 +138,69 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
         },
         identity,
         alwaysThrow,
-        () => setIsLoading(false)
+        () => setIsLoading(false),
     );
     const load = useAsyncCallback(
         () => {
             setIdedInodes(emptyIdedInodes);
             setIsReady?.(false);
-            const promise = inodeStore.getDirectory(path);
+            onDirectoryChange?.(undefined);
+            const promise = inodeStore.getDirectory(path, inode);
             return inodeIdRef.current === 0 ? indicateLoading(promise) : appStore.indicateLoading(promise);
         },
         (data) => {
             setCanSearch?.(data.canSearch);
             setDirectory(data);
+            onDirectoryChange?.(data);
             data.errors.forEach((error) => {
                 consoleStore.logWarning(error);
             });
             // Must happen in next tick because of setInodes(emptyIdedInodes).
             setInode(data.inode);
             setIdedInodes(
-                [...data.inodes.map((data) => ({id: `${inodeIdRef.current++}`, data, meta: {showContent: false}}))].sort(
-                    comparator.compareFn
-                )
+                [...data.children.map((data) => ({id: `${inodeIdRef.current++}`, data, meta: {showContent: false}}))].sort((a, b) =>
+                    compare(compareParameter, inode, a, b),
+                ),
             );
         },
-        authenticationStore.handleAuthenticationError
+        authenticationStore.handleAuthenticationError,
     );
 
-    useDepsEffect(() => setIdedInodes((prev) => [...prev].sort(comparator.compareFn)), [comparator.compareFn]);
+    useDepsEffect(() => setIdedInodes((prev) => [...prev].sort((a, b) => compare(compareParameter, inode, a, b))), [compareParameter]);
     useDepsEffect(() => void load(), [path]);
     useConditionalEffect(idedInodes !== emptyIdedInodes, () => setIsReady?.(true));
 
-    const onGalleryEventRef = useLatest((ev: GalleryEvent): void => {
-        const {_type, oldInode} = ev;
-        const index = idedInodes.findIndex(({data}) => data === oldInode);
-        if (index === -1) {
-            consoleStore.logError('Index of inode not found: ' + JSON.stringify(oldInode));
-            return;
-        }
-        switch (_type) {
-            case 'delete': {
-                onInodeDelete(oldInode, index);
-                return;
+    useListener(
+        (ev: InodeEvent): void => {
+            const {_type} = ev;
+            switch (_type) {
+                case 'add': {
+                    onInodeAdd(ev.inode, 0, false);
+                    return;
+                }
+                case 'delete': {
+                    onInodeDelete(createFindInodeIndexByPath(ev.path));
+                    return;
+                }
+                case 'rename': {
+                    onInodeChange(ev.newInode, createFindInodeIndexByPath(ev.oldPath));
+                    loadInode();
+                    return;
+                }
             }
-            case 'move': {
-                const {newInode} = ev;
-                const {id, meta} = idedInodes[index];
-                onInodeMove(newInode, oldInode, meta, id, index);
-                return;
-            }
-        }
-        return assertUnreachable(_type);
-    });
+            assertUnreachable(_type);
+        },
+        (listener): void => inodeEventBus.addListener(path, listener),
+        (listener): void => inodeEventBus.removeListener(path, listener),
+        [inodeEventBus],
+    );
 
-    const openGallery = (inodeIndex: number): void => {
+    const openGallery = (id: string): void => {
         let imageIndex = 0;
         const images: Inode[] = [];
-        idedInodes.forEach((idedInode, index) => {
-            if (isAnyType(idedInode.data.type, Type.image)) {
-                if (index === inodeIndex) {
+        idedInodes.forEach((idedInode) => {
+            if (isAnyType(idedInode.data.type, Type.image, Type.pdf)) {
+                if (id === idedInode.id) {
                     imageIndex = images.length;
                 }
                 images.push(idedInode.data);
@@ -173,7 +209,6 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
         galleryStore.setGalleryControl({
             index: imageIndex,
             inodes: images,
-            onEvent: (ev) => onGalleryEventRef.current(ev),
         });
     };
 
@@ -183,7 +218,7 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
         if (sibling?.parentOperation?.canDirectoryAdd) {
             nextAddInodeParent = sibling.parentPath;
         } else if (inode.operation.canDirectoryAdd) {
-            nextAddInodeParent = path;
+            nextAddInodeParent = inode.realPath;
         }
         if (nextAddInodeParent !== undefined) {
             setAddInodeAfterIndex((prev) => (prev === localAddInodeAtIndex ? undefined : localAddInodeAtIndex));
@@ -199,20 +234,26 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
         } else if (localAction === Action.edit && inode.operation.canInodeRename) {
             setIsEdit((prev) => !prev);
             handled();
+        } else if (localAction === Action.add) {
+            handleAddAction(localAddInodeAtIndex, handled);
+        } else if (action === Action.cut && inode.operation.canInodeMove) {
+            clipboardStore.cut(createClipboardId(inode), createClipboardItem(inode));
+            handled();
+        } else if (action === Action.paste && inode.operation.canDirectoryAdd) {
+            clipboardStore.paste(inode.path);
+            handled();
         } else if (localAction === Action.reload) {
             load();
             handled();
-        } else if (localAction === Action.add) {
-            handleAddAction(localAddInodeAtIndex, handled);
         }
     });
 
     useImperativeHandle(
-        ref,
+        forwardedRef,
         () => ({
             triggerAction: (localAction, handled) => handleActionRef.current(localAction, beforeFirstInode, handled),
         }),
-        [handleActionRef]
+        [handleActionRef],
     );
 
     const outerRef = useRef<HTMLDivElement>(null);
@@ -232,7 +273,7 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
     const [newName, setNewName] = useState<string>(inode.name);
     useDepsEffect(() => setNewName(inode.name), [inode.name]);
 
-    const move = useMove({context: appContext, inode, onMove});
+    const move = useMove({context: appContext, newParentPath: inode.parentPath, oldPath: inode.path, onMove});
 
     const moveToNewName = (): void => {
         if (newName !== inode.name) {
@@ -240,6 +281,10 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
         }
         setIsEdit(false);
     };
+
+    const {fromIndex, pagination, toIndex} = usePagination(idedInodes.length, pageSize.value ?? constant.pageSize, {
+        onClick: stopPropagation,
+    });
 
     return (
         <div ref={outerRef} className={className}>
@@ -257,7 +302,7 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
             )}
             <DirectoryBreadcrumb
                 disabled={action !== Action.view}
-                getEncodedPath={directoryPageParameter.getEncodedPath}
+                getEncodedPath={appStore.appParameter.getEncodedPath}
                 onClick={(ev): void => handleActionRef.current(action, beforeFirstInode, () => ev.stopPropagation())}
                 path={path}
             />
@@ -266,29 +311,35 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
                 <i className='ps-2'>Loading ...</i>
                 <hr className='m-0' />
             </div>
+            {pagination}
             {addInodeAfterIndex === beforeFirstInode && addInodeComponent}
             {directory !== undefined &&
-                idedInodes.map(({id, data, meta}, index) => (
-                    <Fragment key={id}>
-                        <InodeComponent
-                            context={context}
-                            decentDirectory={decentDirectory}
-                            filterHighlightTags={inode.filterHighlightTagSet ?? filterHighlightTags}
-                            handleAddAction={(handled): void => handleAddAction(index, handled)}
-                            inode={data}
-                            setInode={(newInode: Inode): void => onInodeChange(newInode, meta, id, index)}
-                            isFirstLevel={isFirstLevel}
-                            meta={meta}
-                            nameCursorPosition={directory.nameCursorPosition ?? data.name.length}
-                            onDelete={(): void => onInodeDelete(data, index)}
-                            onMove={(newInode: Inode): void => onInodeMove(newInode, data, meta, id, index)}
-                            openGallery={(): void => openGallery(index)}
-                            parentPath={path}
-                        />
-                        {addInodeAfterIndex === index && addInodeComponent}
-                    </Fragment>
-                ))}
+                idedInodes.map(
+                    ({id, data, meta}, index) =>
+                        fromIndex <= index &&
+                        index < toIndex && (
+                            <Fragment key={id}>
+                                <InodeComponent
+                                    context={context}
+                                    decentDirectory={decentDirectory}
+                                    filterHighlightTags={inode.item?.result?.highlightTagSet ?? filterHighlightTags}
+                                    handleAddAction={(handled): void => handleAddAction(index, handled)}
+                                    inode={data}
+                                    setInode={(newInode: Inode): void => onInodeChange(newInode, createFindInodeIndexById(id, data.path))}
+                                    isFirstLevel={isFirstLevel}
+                                    meta={meta}
+                                    nameCursorPosition={directory.nameCursorPosition ?? data.name.length}
+                                    onDelete={(): void => onInodeDelete(createFindInodeIndexById(id, data.path))}
+                                    onMove={(newInode: Inode): void => onInodeMove(newInode, data, createFindInodeIndexById(id, data.path))}
+                                    openGallery={(): void => openGallery(id)}
+                                    parentPath={inode.realPath}
+                                />
+                                {addInodeAfterIndex === index && addInodeComponent}
+                            </Fragment>
+                        ),
+                )}
             {addInodeAfterIndex === afterLastInode && addInodeComponent}
+            {pagination}
             <div
                 className='hoverable overflow-auto p-2 text-muted text-nowrap'
                 onClick={(ev): void => handleActionRef.current(action, afterLastInode, () => ev.stopPropagation())}
@@ -299,6 +350,28 @@ export const DirectoryComponent = forwardRef(function DirectoryComponent(
     );
 });
 
+type IdedInode = Ided<Inode, InodeMeta>;
+type IdedInodes = ReadonlyArray<IdedInode>;
+
 const afterLastInode = Infinity;
 const beforeFirstInode = -Infinity;
-const emptyIdedInodes: ReadonlyArray<Ided<Inode, InodeMeta>> = [];
+const emptyIdedInodes: IdedInodes = [];
+
+interface FindInodeIndex {
+    readonly find: (idedInodes: IdedInodes) => number | undefined;
+    readonly details: string;
+}
+
+function createFindInodeIndexByPath(pathToFind: string): FindInodeIndex {
+    return {
+        find: (idedInodes): number | undefined => idedInodes.findIndex(({data: {path}}) => path === pathToFind),
+        details: `pathToFind=${pathToFind}`,
+    };
+}
+
+function createFindInodeIndexById(idToFind: string, path: string): FindInodeIndex {
+    return {
+        find: (idedInodes): number | undefined => idedInodes.findIndex(({id}) => id === idToFind),
+        details: `idToFind=${idToFind}, path=${path}`,
+    };
+}

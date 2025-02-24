@@ -1,5 +1,5 @@
 import {useDepsEffect} from 'common/ReactUtil';
-import {ReactNode, useState} from 'react';
+import React, {ReactNode, useState} from 'react';
 import {Button, Modal, ModalBody, ModalFooter, ModalHeader} from 'reactstrap';
 import {AppContext} from 'stores/AppContext';
 
@@ -16,7 +16,7 @@ export function ModalComponent({
 }: {
     readonly content?: ModalContent;
     readonly context: AppContext;
-}): JSX.Element {
+}): React.JSX.Element {
     const [isOpen, setIsOpen] = useState<boolean>(false);
     useDepsEffect(() => {
         setIsOpen(content !== undefined);

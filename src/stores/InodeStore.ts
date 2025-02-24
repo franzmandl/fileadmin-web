@@ -1,27 +1,26 @@
 import {AxiosPromise, AxiosResponse, AxiosStatic} from 'axios';
 import {getResponseData} from 'common/AxiosUtil';
-import {compareNatural} from 'common/Comparator';
 import {serverFormData, serverPath, constant} from 'common/constants';
-import {encodePath, identity, resolvePath} from 'common/Util';
-import {Command} from 'model/Command';
-import {BaseDirectory, createDirectory, Directory} from 'model/Directory';
-import {FileContent} from 'model/FileContent';
-import {BaseInode, createInode, Inode} from 'model/Inode';
-import {NewInode} from 'model/NewInode';
-import {Share} from 'model/Share';
+import {compareNatural, encodePath, identity} from 'common/Util';
+import {Command} from 'dto/Command';
+import {DirectoryDto, createDirectory, Directory} from 'dto/Directory';
+import {FileContent} from 'dto/FileContent';
+import {InodeDto, createInode, Inode} from 'dto/Inode';
+import {NewInode} from 'dto/NewInode';
+import {Share} from 'dto/Share';
 
 export class InodeStore {
     constructor(private readonly axios: AxiosStatic) {}
 
-    readonly getDirectory = (path: string): Promise<Directory> =>
+    readonly getDirectory = (path: string, prev: Inode | undefined): Promise<Directory> =>
         this.axios
-            .get<BaseDirectory>(serverPath.authenticatedPath.directory(encodePath(path)), {withCredentials: true})
-            .then(createDirectoryFromResponse);
+            .get<DirectoryDto>(serverPath.authenticatedPath.directory(encodePath(path)), {withCredentials: true})
+            .then((response) => createDirectoryFromResponse(response, prev));
 
-    readonly getInode = (path: string): Promise<Inode> =>
+    readonly getInode = (path: string, prev: Inode | undefined): Promise<Inode> =>
         this.axios
-            .get<BaseInode>(serverPath.authenticatedPath.inode(encodePath(path)), {withCredentials: true})
-            .then(createInodeFromResponse);
+            .get<InodeDto>(serverPath.authenticatedPath.inode(encodePath(path)), {withCredentials: true})
+            .then((response) => createInodeFromResponse(response, prev));
 
     readonly getSuggestion = (path: string, word: string): Promise<ReadonlyArray<string>> =>
         this.axios
@@ -32,11 +31,11 @@ export class InodeStore {
             .then((suggestions) => {
                 const startsWithWordRegex = new RegExp('^' + word.replaceAll(/[^\p{L}\d_]/gu, ''), 'i');
                 return suggestions.sort((a: string, b: string) => {
-                    if (a.match(startsWithWordRegex)) {
-                        if (!b.match(startsWithWordRegex)) {
+                    if (startsWithWordRegex.exec(a)) {
+                        if (!startsWithWordRegex.exec(b)) {
                             return -1;
                         }
-                    } else if (b.match(startsWithWordRegex)) {
+                    } else if (startsWithWordRegex.exec(b)) {
                         return 1;
                     }
                     return compareNatural(a, b);
@@ -47,11 +46,11 @@ export class InodeStore {
         this.axios.post<T>(serverPath.authenticatedPath.command(), command, {withCredentials: true});
 
     readonly add = (path: string, newInode: NewInode): Promise<Inode> =>
-        this.applyCommand<BaseInode>({
+        this.applyCommand<InodeDto>({
             _type: 'Add',
             path,
             newInode,
-        }).then(createInodeFromResponse);
+        }).then((response) => createInodeFromResponse(response, undefined));
 
     readonly delete = (inode: Inode): Promise<void> =>
         this.applyCommand<void>({
@@ -59,12 +58,12 @@ export class InodeStore {
             path: inode.path,
         }).then(getResponseData);
 
-    readonly move = (inode: Inode, relativeDestination: string): Promise<Inode> =>
-        this.applyCommand<BaseInode>({
+    readonly move = (path: string, newPath: string): Promise<Inode> =>
+        this.applyCommand<InodeDto>({
             _type: 'Move',
-            path: inode.path,
-            newPath: resolvePath(inode.parentPath, relativeDestination),
-        }).then(createInodeFromResponse);
+            path,
+            newPath,
+        }).then((response) => createInodeFromResponse(response, undefined));
 
     readonly share = (path: string, days: number): Promise<ReadonlyArray<Share>> =>
         this.applyCommand<ReadonlyArray<Share>>({
@@ -73,17 +72,17 @@ export class InodeStore {
             days,
         }).then(getResponseData);
 
-    readonly toDirectory = (path: string): Promise<Inode> =>
-        this.applyCommand<BaseInode>({
+    readonly toDirectory = (path: string, prev: Inode | undefined): Promise<Inode> =>
+        this.applyCommand<InodeDto>({
             _type: 'ToDirectory',
             path,
-        }).then(createInodeFromResponse);
+        }).then((response) => createInodeFromResponse(response, prev));
 
-    readonly toFile = (path: string): Promise<Inode> =>
-        this.applyCommand<BaseInode>({
+    readonly toFile = (path: string, prev: Inode | undefined): Promise<Inode> =>
+        this.applyCommand<InodeDto>({
             _type: 'ToFile',
             path,
-        }).then(createInodeFromResponse);
+        }).then((response) => createInodeFromResponse(response, prev));
 
     readonly getFile = (path: string): Promise<FileContent> =>
         this.axios
@@ -93,38 +92,43 @@ export class InodeStore {
             })
             .then(createFileContentFromResponse);
 
-    readonly postFile = (path: string, lastModified: number | null, file: File): Promise<Inode> =>
+    readonly postFile = (path: string, lastModifiedMilliseconds: number | undefined, file: File, prev: Inode | undefined): Promise<Inode> =>
         this.axios
-            .post<BaseInode>(serverPath.authenticatedPath.file(encodePath(path)), serverFormData.authenticatedPath.file(file), {
+            .post<InodeDto>(serverPath.authenticatedPath.file(encodePath(path)), serverFormData.authenticatedPath.file(file), {
                 withCredentials: true,
                 headers: {
                     'Content-Type': 'multipart/form-data',
-                    [constant.header.lastModified]: lastModified,
+                    [constant.header.lastModifiedMilliseconds]: lastModifiedMilliseconds,
                 },
             })
-            .then(createInodeFromResponse);
+            .then((response) => createInodeFromResponse(response, prev));
 
-    readonly putFile = (path: string, {lastModified, value}: FileContent): Promise<Inode> =>
+    readonly putFile = (path: string, {lastModifiedMilliseconds, value}: FileContent, prev: Inode | undefined): Promise<Inode> =>
         this.axios
-            .put<BaseInode>(serverPath.authenticatedPath.file(encodePath(path)), value, {
+            .put<InodeDto>(serverPath.authenticatedPath.file(encodePath(path)), value, {
                 withCredentials: true,
                 headers: {
                     'Content-Type': 'text/plain',
-                    [constant.header.lastModified]: lastModified,
+                    [constant.header.lastModifiedMilliseconds]: lastModifiedMilliseconds,
                 },
             })
-            .then(createInodeFromResponse);
+            .then((response) => createInodeFromResponse(response, prev));
+
+    readonly scanItems = (path: string, prev: Inode | undefined): Promise<Inode | undefined> =>
+        this.axios
+            .get<InodeDto | null | undefined>(serverPath.authenticatedPath.scanItems(encodePath(path)), {withCredentials: true})
+            .then(({data}) => (data !== null && data !== undefined ? createInode(data, prev) : undefined));
 }
 
-function createDirectoryFromResponse({data}: AxiosResponse<BaseDirectory>): Directory {
-    return createDirectory(data);
+function createDirectoryFromResponse({data}: AxiosResponse<DirectoryDto>, prev: Inode | undefined): Directory {
+    return createDirectory(data, prev);
 }
 
 function createFileContentFromResponse({data, headers}: AxiosResponse<string>): FileContent {
-    const lastModified = headers[constant.header.lastModified];
-    return {lastModified: lastModified !== undefined ? Number(lastModified) : null, value: data};
+    const lastModifiedMilliseconds = headers[constant.header.lastModifiedMilliseconds];
+    return {lastModifiedMilliseconds: lastModifiedMilliseconds !== undefined ? Number(lastModifiedMilliseconds) : undefined, value: data};
 }
 
-function createInodeFromResponse({data}: AxiosResponse<BaseInode>): Inode {
-    return createInode(data);
+function createInodeFromResponse({data}: AxiosResponse<InodeDto>, prev: Inode | undefined): Inode {
+    return createInode(data, prev);
 }

@@ -1,7 +1,6 @@
-import {focusNothing} from 'common/ReactUtil';
-import {useSanitizedValue} from 'common/ReactUtil';
+import {focusNothing, useSanitizedValue} from 'common/ReactUtil';
 import {nameAllowSlashRegex} from 'common/Util';
-import {Dispatch} from 'react';
+import React, {Dispatch} from 'react';
 import {Button} from 'reactstrap';
 import {AutoResizeTextarea} from 'components/textarea/AutoResizeTextarea';
 import {SetKeyboardControl} from 'components/keyboard-control/KeyboardControl';
@@ -28,7 +27,7 @@ export function MoveInodeComponent({
     readonly setNewNameCursorPosition?: Dispatch<number | undefined>;
     readonly spellCheck: boolean;
     readonly suggestionControl: SuggestionControl;
-}): JSX.Element {
+}): React.JSX.Element {
     const [, setNewSanitizedName] = useSanitizedValue([newName, setNewName], nameAllowSlashRegex);
 
     const onSaveKeyDown = (ev: React.KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -46,7 +45,7 @@ export function MoveInodeComponent({
                 onEnterKeyDown={onSaveKeyDown}
                 spellCheck={spellCheck}
                 suggestionControl={suggestionControl}
-                textareaClassName='font-monospace ps-2'
+                textareaClassName='bg-transparent font-monospace ps-2'
                 value={newName}
                 setValue={setNewSanitizedName}
             />

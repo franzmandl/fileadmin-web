@@ -3,8 +3,8 @@ import {useLatest} from './ReactUtil';
 
 export function useDelayed(
     onStart: () => void,
-    fn: () => void,
-    timeoutMs: number
+    fn: () => unknown,
+    timeoutMs: number,
 ): {readonly doDelayed: () => void; readonly doNow: () => void} {
     const timeoutRef = useRef<NodeJS.Timeout | undefined>();
     const fnRef = useLatest(() => {

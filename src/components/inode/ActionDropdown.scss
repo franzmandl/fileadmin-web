@@ -1,0 +1,16 @@
+@media not (hover: hover), not (pointer: fine) {
+    // see https://itnext.io/finally-a-css-only-solution-to-hover-on-touchscreens-c498af39c31c
+    .action-dropdown-toggle {
+        --bs-btn-hover-color: var(--bs-btn-color);
+        --bs-btn-hover-bg: var(--bs-btn-bg);
+        --bs-btn-hover-border-color: var(--bs-btn-border-color);
+    }
+}
+
+.action-dropdown-menu {
+    --bs-dropdown-min-width: 0rem;
+
+    > .dropdown-item {
+        padding: 0.5rem 1rem;
+    }
+}

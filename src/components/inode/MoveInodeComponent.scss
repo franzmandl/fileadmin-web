@@ -3,5 +3,5 @@
 .move-inode-component {
     display: grid;
     grid-template-columns: 1fr auto;
-    background-color: $input-bg;
+    background-color: mix($warning, $body-bg, 4%);
 }

@@ -1,4 +1,4 @@
-import {Fragment, ReactNode, useState} from 'react';
+import React, {Fragment, ReactNode, useState} from 'react';
 import {DropdownItem} from 'reactstrap';
 import './ConsoleComponent.scss';
 import {DropdownItemCheckbox} from 'components/dropdown/DropdownItemCheckbox';
@@ -25,7 +25,7 @@ export function ConsoleComponent({
     readonly entries: ReadonlyArray<ConsoleEntry>;
     readonly hidden: boolean;
     readonly hide: () => void;
-}): JSX.Element {
+}): React.JSX.Element {
     const [showLevels, setShowLevels] = useState<ReadonlyArray<ConsoleEntryLevel>>([
         ConsoleEntryLevel.info,
         ConsoleEntryLevel.warning,
@@ -45,7 +45,7 @@ export function ConsoleComponent({
                                 {index !== 0 && <hr className='m-0' />}
                                 {node}
                             </Fragment>
-                        )
+                        ),
                 )}
             </div>
             <div className='page-sidebar'>
@@ -82,7 +82,7 @@ function ToggleDropdownItem({
     readonly level: ConsoleEntryLevel;
     readonly showLevel: (level: ConsoleEntryLevel) => boolean;
     readonly setShowLevel: (level: ConsoleEntryLevel, value: boolean) => void;
-}): JSX.Element {
+}): React.JSX.Element {
     return (
         <DropdownItemCheckbox checked={showLevel(level)} setChecked={(value): void => setShowLevel(level, value)}>
             {children}

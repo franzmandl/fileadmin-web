@@ -1,32 +1,32 @@
 @import './variables.scss';
 
-.thumbnail {
-    display: inline-block;
-    height: $thumbnail-dimension;
-    width: $thumbnail-dimension;
-    position: relative;
-    background-color: #222;
-
-    img {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        max-height: $thumbnail-dimension;
-        max-width: $thumbnail-dimension;
-    }
-}
-
 .disabled {
     pointer-events: none;
+}
+
+a.disabled {
     color: inherit !important;
 }
 
 .link-tag {
-    color: #9c9c9c;
+    color: $link-tag-color;
+    cursor: pointer;
+    text-decoration: underline;
 
+    &:focus,
     &:hover {
-        color: #888;
+        color: shift-color($link-tag-color, $link-shade-percentage);
+    }
+}
+
+.link-tag-match {
+    color: $link-tag-match-color;
+    cursor: pointer;
+    text-decoration: underline;
+
+    &:focus,
+    &:hover {
+        color: shift-color($link-tag-match-color, $link-shade-percentage);
     }
 }
 
@@ -65,25 +65,4 @@ textarea.reboot {
 .overflow-ellipsis {
     overflow: hidden;
     text-overflow: ellipsis;
-}
-
-@media (min-width: $mobile-breakpoint) {
-    .hoverable:hover {
-        cursor: pointer;
-    }
-    .action-view .hoverable:hover {
-        background-color: rgba($primary, 0.25);
-    }
-    .action-edit .hoverable:hover {
-        background-color: rgba($warning, 0.11);
-    }
-    .action-reload .hoverable:hover {
-        background-color: rgba($secondary, 0.2);
-    }
-    .action-add .hoverable:hover {
-        background-color: rgba($success, 0.23);
-    }
-    .action-delete .hoverable:hover {
-        background-color: rgba($danger, 0.15);
-    }
 }

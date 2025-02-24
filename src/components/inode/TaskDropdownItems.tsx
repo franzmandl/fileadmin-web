@@ -1,8 +1,9 @@
 import classNames from 'classnames';
 import {constant} from 'common/constants';
 import {separator} from 'common/Util';
-import {Inode} from 'model/Inode';
-import {Task} from 'model/Task';
+import {Inode} from 'dto/Inode';
+import {Task} from 'dto/Task';
+import React from 'react';
 import {DropdownItem} from 'reactstrap';
 import {AppContext} from 'stores/AppContext';
 
@@ -16,7 +17,7 @@ export function TaskDropdownItems({
     readonly inode: Inode;
     readonly move: (relativeDestination: string, onSuccess: () => void) => void;
     readonly task: Task;
-}): JSX.Element {
+}): React.JSX.Element {
     const actions = Object.keys(task.actions);
     if (actions.length === 0) {
         return <></>;
@@ -43,8 +44,8 @@ function TaskDropdownItem({
     readonly inode: Inode;
     readonly move: (relativeDestination: string, onSuccess: () => void) => void;
     readonly task: Task;
-}): JSX.Element {
-    const {friendlyName, className} = constant.knownTaskActions[action] ?? {friendlyName: action, className: ''};
+}): React.JSX.Element {
+    const {friendlyName, className} = constant.knownTaskActions.get(action) ?? {friendlyName: action, className: ''};
     const relativeDestination = task.actions[action];
     const isMoved = relativeDestination === inode.name;
     return (
@@ -57,8 +58,8 @@ function TaskDropdownItem({
                         <>
                             {relativeDestination.indexOf(separator) !== -1 ? 'Moved to' : 'Set to'}&nbsp;
                             <span className={classNames('badge', className)}>{friendlyName}</span>
-                        </>
-                    )
+                        </>,
+                    ),
                 )
             }
             title={relativeDestination}

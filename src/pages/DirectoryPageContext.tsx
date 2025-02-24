@@ -1,8 +1,8 @@
-import {Comparator} from 'common/Comparator';
 import {ImmutableRefObject} from 'common/ReactUtil';
 import {Action} from 'components/Action';
 import {AppContext} from 'stores/AppContext';
 import {DirectoryPageParameter} from './useDirectoryPageParameter';
+import {TagModalControl} from 'components/filter/TagModal';
 
 export interface DirectoryPageContext {
     readonly actionChangeListeners: {
@@ -10,7 +10,7 @@ export interface DirectoryPageContext {
         readonly remove: (listener: (nextAction: Action, prevAction: Action) => void) => void;
     };
     readonly appContext: AppContext;
-    readonly comparator: Comparator;
     readonly directoryPageParameter: DirectoryPageParameter;
     readonly dropdownContainerRef: ImmutableRefObject<HTMLDivElement | null>;
+    readonly setTagModalControl: (control: TagModalControl) => void;
 }

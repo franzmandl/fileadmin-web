@@ -7,22 +7,22 @@
     }
 
     > .virtual {
-        background-color: rgba(#9318ff, 0.075);
+        background-color: mix(#9318ff, $body-bg, 7.5%);
     }
 
     > .visited {
-        background-color: rgba($secondary, 0.075);
+        background-color: mix($secondary, $body-bg, 7.5%);
     }
 
     > .virtual.visited {
-        background-color: rgba(#dcb3ff, 0.083);
+        background-color: mix(#dcb3ff, $body-bg, 8.3%);
     }
 }
 
 .inode-component-dropdown-buttons {
     padding: 0;
     display: grid;
-    grid-template-columns: auto auto auto;
+    grid-template-columns: 1fr 1fr 1fr;
 
     > .inode-component-dropdown-button {
         --bs-btn-bg: $dropdown-dark-bg;

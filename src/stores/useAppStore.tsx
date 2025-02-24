@@ -1,13 +1,15 @@
-import {alwaysThrow, arrayRemoveInPlace, getHashParams, identity} from 'common/Util';
+import {alwaysThrow, arrayRemoveInPlaceByValue, getHashParams, identity} from 'common/Util';
 import {ModalContent} from 'components/util/ModalComponent';
-import {Dispatch, ReactNode, SetStateAction, useMemo, useRef, useState} from 'react';
-import {Button} from 'reactstrap';
+import React, {Dispatch, ReactNode, SetStateAction, useMemo, useRef, useState} from 'react';
+import {Button, DropdownItem, Input, InputGroup} from 'reactstrap';
 import toast from 'react-hot-toast';
 import {useAsyncCallback} from 'common/useAsyncCallback';
 import {KeyboardControl, SetKeyboardControl} from 'components/keyboard-control/KeyboardControl';
 import {ImmutableRefObject, useDepsEffect, useLatest} from 'common/ReactUtil';
 import {DropdownItemCheckbox} from 'components/dropdown/DropdownItemCheckbox';
 import {AppParameter, useAppParameter} from './useAppParameter';
+import {constant} from 'common/constants';
+import {useListener} from 'common/useListener';
 
 export interface AppStore {
     readonly appParameter: AppParameter;
@@ -23,12 +25,12 @@ export interface AppStore {
         readonly remove: (listener: (ev: KeyboardEvent) => boolean) => void;
     };
     readonly modalContainerRef: ImmutableRefObject<HTMLDivElement | null>;
+    readonly nowDropdownItem: ReactNode;
     readonly preventClose: <T>(promise: Promise<T>) => Promise<T>;
     readonly spellCheckDropdownItem: ReactNode;
-    readonly toast: (message: string | JSX.Element) => void;
+    readonly toast: (message: string | React.JSX.Element) => void;
 }
 
-const defaultHashParams = getHashParams();
 const emptyParams = new URLSearchParams();
 
 export function useAppStore(): {
@@ -42,12 +44,12 @@ export function useAppStore(): {
     const modalContainerRef = useRef<HTMLDivElement>(null);
     const [modalContent, setModalContent] = useState<ModalContent>();
     const preventCloseCounterRef = useRef(0);
-    const [currentParams, setCurrentParams] = useState(defaultHashParams);
-    useDepsEffect(() => {
-        const listener = (): void => setCurrentParams(getHashParams());
-        window.addEventListener('hashchange', listener);
-        return () => window.removeEventListener('hashchange', listener);
-    }, []);
+    const [currentParams, setCurrentParams] = useState(constant.hashParams);
+    useListener(
+        (): void => setCurrentParams(getHashParams()),
+        (listener): void => window.addEventListener('hashchange', listener),
+        (listener): void => window.removeEventListener('hashchange', listener),
+    );
     const appParameter = useAppParameter(emptyParams, currentParams, setCurrentParams);
 
     const enterPreventClose = (): void => void (preventCloseCounterRef.current += 1);
@@ -60,8 +62,8 @@ export function useAppStore(): {
             },
             identity,
             alwaysThrow,
-            () => setIsLoading(false)
-        )
+            () => setIsLoading(false),
+        ),
     );
     const preventCloseRef: ImmutableRefObject<<T>(promise: Promise<T>) => Promise<T>> = useLatest(
         useAsyncCallback<unknown, [Promise<unknown>], any>(
@@ -71,8 +73,8 @@ export function useAppStore(): {
             },
             identity,
             alwaysThrow,
-            exitPreventClose
-        )
+            exitPreventClose,
+        ),
     );
 
     useDepsEffect(() => {
@@ -89,18 +91,18 @@ export function useAppStore(): {
     }, []);
 
     const keyDownListeners = useRef<((ev: KeyboardEvent) => boolean)[]>([]);
-    useDepsEffect(() => {
-        const listener = (ev: KeyboardEvent): void => {
+    useListener(
+        (ev: KeyboardEvent): void => {
             const listeners = keyDownListeners.current;
             for (let index = listeners.length - 1; index >= 0; index--) {
                 if (listeners[index](ev)) {
                     break;
                 }
             }
-        };
-        window.addEventListener('keydown', listener);
-        return () => window.removeEventListener('keydown', listener);
-    }, []);
+        },
+        (listener): void => window.addEventListener('keydown', listener),
+        (listener): void => window.removeEventListener('keydown', listener),
+    );
 
     return {
         appStore: useMemo(
@@ -115,7 +117,7 @@ export function useAppStore(): {
                                 return <OkButton closeModal={closeModal} resolve={resolve} />;
                             },
                             onClosed: () => resolve(false),
-                        })
+                        }),
                     ),
                 currentParams,
                 setCurrentParams,
@@ -125,9 +127,28 @@ export function useAppStore(): {
                 setKeyboardControl,
                 keyDownListeners: {
                     add: (listener: (ev: KeyboardEvent) => boolean): void => void keyDownListeners.current.push(listener),
-                    remove: (listener: (ev: KeyboardEvent) => boolean): void => void arrayRemoveInPlace(keyDownListeners.current, listener),
+                    remove: (listener: (ev: KeyboardEvent) => boolean): void =>
+                        void arrayRemoveInPlaceByValue(keyDownListeners.current, listener),
                 },
                 modalContainerRef,
+                nowDropdownItem: (
+                    <DropdownItem text toggle={false}>
+                        <InputGroup size='sm'>
+                            <Input
+                                bsSize='sm'
+                                invalid={appParameter.values.now.string !== '' && appParameter.values.now.date === null}
+                                placeholder='Now'
+                                style={{width: '7rem'}}
+                                value={appParameter.values.now.string}
+                                onChange={(ev): void => appParameter.setNow(ev.target.value)}
+                            />
+                            <Button
+                                className={'mdi ' + (appParameter.values.now.string === '' ? 'mdi-calendar-today' : 'mdi-close')}
+                                onClick={(): void => appParameter.setNow(appParameter.values.now.string === '' ? constant.nowString : '')}
+                            />
+                        </InputGroup>
+                    </DropdownItem>
+                ),
                 preventClose: (...args) => preventCloseRef.current(...args),
                 spellCheckDropdownItem: (
                     <DropdownItemCheckbox checked={appParameter.values.spellCheck} setChecked={appParameter.setSpellCheck}>
@@ -136,7 +157,7 @@ export function useAppStore(): {
                 ),
                 toast,
             }),
-            [appParameter, currentParams, indicateLoadingRef, preventCloseRef]
+            [appParameter, currentParams, indicateLoadingRef, preventCloseRef],
         ),
         isLoading,
         keyboardControl,
@@ -144,7 +165,7 @@ export function useAppStore(): {
     };
 }
 
-function OkButton({closeModal, resolve}: {readonly closeModal: () => void; readonly resolve: (value: boolean) => void}): JSX.Element {
+function OkButton({closeModal, resolve}: {readonly closeModal: () => void; readonly resolve: (value: boolean) => void}): React.JSX.Element {
     return (
         <Button
             onClick={(): void => {

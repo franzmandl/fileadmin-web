@@ -1,4 +1,4 @@
-import {Dispatch} from 'react';
+import React, {Dispatch} from 'react';
 import {Input} from 'reactstrap';
 
 export function CheckboxInput({
@@ -15,7 +15,7 @@ export function CheckboxInput({
     readonly parentIndex: number;
     readonly parentValues: ReadonlyArray<string>;
     readonly setParentValue: Dispatch<string>;
-}): JSX.Element {
+}): React.JSX.Element {
     return (
         <Input
             type='checkbox'
@@ -31,7 +31,7 @@ export function CheckboxInput({
                         ev.target.checked ? 'x' : ' ',
                         ']',
                         ...parentValues.slice(parentIndex + 1),
-                    ].join('')
+                    ].join(''),
                 )
             }
         />

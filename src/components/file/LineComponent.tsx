@@ -1,18 +1,17 @@
 import classNames from 'classnames';
 import {arrayReplace, focusNothing} from 'common/ReactUtil';
-import {getOriginalIndent, newLine, resolvePath} from 'common/Util';
+import {getOriginalIndent, newLine} from 'common/Util';
 import {Action} from 'components/Action';
 import {AutoResizeTextarea} from 'components/textarea/AutoResizeTextarea';
 import {SetKeyboardControl} from 'components/keyboard-control/KeyboardControl';
-import React, {Fragment, ReactNode} from 'react';
-import {Dispatch} from 'react';
+import React, {Dispatch, Fragment, ReactNode} from 'react';
 import {CheckboxInput} from './CheckboxInput';
 import './LineComponent.scss';
 import {SuggestionControl} from 'components/textarea/RichTextarea';
 import {tagRegexGrouped, urlRegex, wholeUrlRegex} from 'common/constants';
 
-export type GetClientUrl = (path: string) => string;
 export type GetServerUrl = (relativePath: string, isThumbnail: boolean) => string;
+export type OnTagClick = ((clickedTag: string) => void) | undefined;
 
 export interface LineMeta {
     readonly cursorPosition?: number;
@@ -22,13 +21,12 @@ export interface LineMeta {
 export function LineComponent({
     action,
     filterHighlightTags,
-    filterOutputPath,
-    getClientUrl,
     getServerUrl,
     handleAction,
     setKeyboardControl,
     line,
     meta,
+    onTagClick,
     parentIndex,
     save,
     spellCheck,
@@ -37,29 +35,27 @@ export function LineComponent({
 }: {
     readonly action: Action;
     readonly filterHighlightTags: ReadonlySet<string>;
-    readonly filterOutputPath: string | null;
-    readonly getClientUrl: GetClientUrl;
     readonly getServerUrl: GetServerUrl;
     readonly handleAction: (action: Action, line: string, index: number, cursorPosition: number, handled: () => void) => void;
     readonly setKeyboardControl?: SetKeyboardControl;
     readonly line: string;
     readonly meta: LineMeta;
+    readonly onTagClick: OnTagClick;
     readonly parentIndex: number;
     readonly save: () => void;
     readonly spellCheck: boolean;
     readonly setParentValue: (value: string, index: number) => void;
     readonly suggestionControl: SuggestionControl;
-}): JSX.Element {
+}): React.JSX.Element {
     const onClick = (ev: React.MouseEvent, cursorPosition: number): void =>
         handleAction(action, line, parentIndex, cursorPosition, () => ev.stopPropagation());
     const disabled = action !== Action.view;
     const context: LineContext = {
         disabled,
         filterHighlightTags,
-        filterOutputPath,
-        getClientUrl,
         getServerUrl,
         onClick,
+        onTagClick,
     };
     const setValue = (value: string): void => setParentValue(value, parentIndex);
     const onSaveKeyDown = (ev: React.KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -86,7 +82,7 @@ export function LineComponent({
                     .map((part, index, parts) =>
                         helper.wrap(
                             <ParsedIndent
-                                key={index}
+                                key={`${index * indexFactor}${LineComponent.name}`}
                                 context={context}
                                 cursorOffset={helper.cursorOffset}
                                 indentedValue={part}
@@ -94,8 +90,8 @@ export function LineComponent({
                                 parentValues={parts}
                                 setParentValue={setValue}
                             />,
-                            part.length + 1
-                        )
+                            part.length + 1,
+                        ),
                     )
             )}
         </div>
@@ -107,10 +103,9 @@ type OnClick = (ev: React.MouseEvent, cursorPosition: number) => void;
 interface LineContext {
     readonly disabled: boolean;
     readonly filterHighlightTags: ReadonlySet<string>;
-    readonly filterOutputPath: string | null;
-    readonly getClientUrl: GetClientUrl;
     readonly getServerUrl: GetServerUrl;
     readonly onClick: OnClick;
+    readonly onTagClick: OnTagClick;
 }
 
 function ParsedIndent({
@@ -127,7 +122,7 @@ function ParsedIndent({
     readonly parentIndex: number;
     readonly parentValues: ReadonlyArray<string>;
     readonly setParentValue: Dispatch<string>;
-}): JSX.Element {
+}): React.JSX.Element {
     const indent = getOriginalIndent(indentedValue);
     const value = indentedValue.substring(indent.length);
     const setIndentedValue = (nextIndentedValue: string): void => {
@@ -142,22 +137,27 @@ function ParsedIndent({
                 {parseCheckbox(indent, (nextIndent) => setIndentedValue(nextIndent + value), cursorOffset, context)}
             </OnClickDiv>
             <div className='text-line-column2' onClick={(ev): void => context.onClick(ev, cursorOffset + indentedValue.length)}>
-                {parseCheckbox(value, (nextValue) => setIndentedValue(indent + nextValue), cursorOffset + indent.length, context)}
+                {value === '---' ? (
+                    <hr />
+                ) : (
+                    parseCheckbox(value, (nextValue) => setIndentedValue(indent + nextValue), cursorOffset + indent.length, context)
+                )}
             </div>
         </div>
     );
 }
 
 function parseCheckbox(value: string, setValue: Dispatch<string>, cursorOffset: number, context: LineContext): ReactNode {
-    const keySuffix = 'c';
     const helper = new Helper(cursorOffset);
     return value.split(/(\[[x ]\])/).map((part, index, parts) =>
         helper.wrap(
             index % 2 === 0 ? (
-                <Fragment key={`${index}${keySuffix}`}>{parseMarkdownImage(part, helper.cursorOffset, context)}</Fragment>
+                <Fragment key={`${index * indexFactor}${parseCheckbox.name}`}>
+                    {parseMarkdownImage(part, helper.cursorOffset, context)}
+                </Fragment>
             ) : (
                 <OnClickDiv
-                    key={`${index}${keySuffix}`}
+                    key={`${index * indexFactor}${parseCheckbox.name}`}
                     className='text-sign-container'
                     cursorOffset={helper.cursorOffset + 2}
                     onClick={context.onClick}
@@ -172,25 +172,26 @@ function parseCheckbox(value: string, setValue: Dispatch<string>, cursorOffset: 
                     />
                 </OnClickDiv>
             ),
-            part.length
-        )
+            part.length,
+        ),
     );
 }
 
 function parseMarkdownImage(value: string, cursorOffset: number, context: LineContext): ReactNode {
-    const keySuffix = 'mi';
     const helper = new Helper(cursorOffset);
-    return value.split(/(!\[([^\]]*)\]\(([^)]*)\))/).map((part, index, parts) =>
+    return value.split(/(!\[(.*?)\]\((.*?)\))/).map((part, index, parts) =>
         index % 4 === 0
             ? helper.wrap(
-                  <Fragment key={`${index}${keySuffix}`}>{parseMarkdownUrl(part, helper.cursorOffset, context)}</Fragment>,
-                  part.length
+                  <Fragment key={`${index * indexFactor}${parseMarkdownImage.name}`}>
+                      {parseMarkdownUrl(part, helper.cursorOffset, context)}
+                  </Fragment>,
+                  part.length,
               )
             : index % 4 === 3 &&
               // parts[index - 2] = '![' parts[index - 1] '](' parts[index] = part ')'
               helper.wrap(
                   <OnClickDiv
-                      key={`${index}${keySuffix}`}
+                      key={`${index * indexFactor}${parseMarkdownImage.name}`}
                       cursorOffset={helper.cursorOffset + parts[index - 2].length - 1}
                       onClick={context.onClick}
                   >
@@ -208,8 +209,8 @@ function parseMarkdownImage(value: string, cursorOffset: number, context: LineCo
                           </a>
                       )}
                   </OnClickDiv>,
-                  parts[index - 2].length
-              )
+                  parts[index - 2].length,
+              ),
     );
 }
 
@@ -218,15 +219,23 @@ function renderImg(alt: string, src: string): ReactNode {
 }
 
 function parseMarkdownUrl(value: string, cursorOffset: number, context: LineContext): ReactNode {
-    const keySuffix = 'mu';
     const helper = new Helper(cursorOffset);
-    return value.split(/(\[([^\]]*)\]\(([^)]*)\))/).map((part, index, parts) =>
+    return value.split(/(\[(.*?)\]\((.*?)\))/).map((part, index, parts) =>
         index % 4 === 0
-            ? helper.wrap(<Fragment key={`${index}${keySuffix}`}>{parseRawUrl(part, helper.cursorOffset, context)}</Fragment>, part.length)
+            ? helper.wrap(
+                  <Fragment key={`${index * indexFactor}${parseMarkdownUrl.name}`}>
+                      {parseRawUrl(part, helper.cursorOffset, context)}
+                  </Fragment>,
+                  part.length,
+              )
             : index % 4 === 3 &&
               // parts[index - 2] = '[' parts[index - 1] '](' parts[index] = part ')'
               helper.wrap(
-                  <OnClickSpan key={`${index}${keySuffix}`} cursorOffset={helper.cursorOffset + 1} onClick={context.onClick}>
+                  <OnClickSpan
+                      key={`${index * indexFactor}${parseMarkdownUrl.name}`}
+                      cursorOffset={helper.cursorOffset + 1}
+                      onClick={context.onClick}
+                  >
                       <a
                           href={wholeUrlRegex.test(part) ? part : context.getServerUrl(part, false)}
                           target='_blank'
@@ -237,20 +246,19 @@ function parseMarkdownUrl(value: string, cursorOffset: number, context: LineCont
                           {parts[index - 1]}
                       </a>
                   </OnClickSpan>,
-                  parts[index - 2].length
-              )
+                  parts[index - 2].length,
+              ),
     );
 }
 
 function parseRawUrl(value: string, cursorOffset: number, context: LineContext): ReactNode {
-    const keySuffix = 'ru';
     const helper = new Helper(cursorOffset);
     return value.split(urlRegex).map((part, index) =>
         helper.wrap(
             index % 2 === 0 ? (
-                <Fragment key={`${index}${keySuffix}`}>{parseFormat(part, helper.cursorOffset, context)}</Fragment>
+                <Fragment key={`${index * indexFactor}${parseRawUrl.name}`}>{parseFormat(part, helper.cursorOffset, context)}</Fragment>
             ) : (
-                <OnClickSpan key={`${index}${keySuffix}`} cursorOffset={helper.cursorOffset} onClick={context.onClick}>
+                <OnClickSpan key={`${index * indexFactor}${parseRawUrl.name}`} cursorOffset={helper.cursorOffset} onClick={context.onClick}>
                     <a
                         href={part}
                         target='_blank'
@@ -262,26 +270,25 @@ function parseRawUrl(value: string, cursorOffset: number, context: LineContext):
                     </a>
                 </OnClickSpan>
             ),
-            part.length
-        )
+            part.length,
+        ),
     );
 }
 
 function parseFormat(value: string, cursorOffset: number, context: LineContext): ReactNode {
-    const keySuffix = 'f';
     const helper = new Helper(cursorOffset);
     // NOTE: Do not forget to adapt getOriginalIndent.
-    return value.split(/(\*{2}.+?\*{2}|~{2}.+?~{2}|\+{2}|-{2}|\+-|\([!/?iox ]\))/).map((part, index) =>
+    return value.split(/(\*\*.+?\*\*|~~.+?~~|\+\+|--|\+-|\([!/?iox ]\))/).map((part, index) =>
         helper.wrap(
             index % 2 === 0 ? (
-                <Fragment key={`${index}${keySuffix}`}>{parseTags(part, helper.cursorOffset, context)}</Fragment>
+                <Fragment key={`${index * indexFactor}${parseFormat.name}`}>{parseTags(part, helper.cursorOffset, context)}</Fragment>
             ) : (
-                <OnClickSpan key={`${index}${keySuffix}`} cursorOffset={helper.cursorOffset} onClick={context.onClick}>
+                <OnClickSpan key={`${index * indexFactor}${parseFormat.name}`} cursorOffset={helper.cursorOffset} onClick={context.onClick}>
                     {parseFormatHelper(part)}
                 </OnClickSpan>
             ),
-            part.length
-        )
+            part.length,
+        ),
     );
 }
 
@@ -317,64 +324,73 @@ function parseFormatHelper(value: string): ReactNode {
 }
 
 function parseTags(value: string, cursorOffset: number, context: LineContext): ReactNode {
-    const {filterOutputPath} = context;
-    if (filterOutputPath === null) {
+    const {onTagClick} = context;
+    if (onTagClick === undefined) {
         return parseKeywords(value, cursorOffset, context);
     } else {
-        const keySuffix = 't';
         const helper = new Helper(cursorOffset);
         return value.split(tagRegexGrouped).map((part, index, parts) =>
             index % 4 === 0
                 ? helper.wrap(
-                      <Fragment key={`${index}${keySuffix}`}>{parseKeywords(part, helper.cursorOffset, context)}</Fragment>,
-                      part.length
+                      <Fragment key={`${index * indexFactor}${parseTags.name}`}>
+                          {parseKeywords(part, helper.cursorOffset, context)}
+                      </Fragment>,
+                      part.length,
                   )
                 : index % 4 === 3 &&
                   // parts[index - 2] = ('#@' = parts[index - 1]) + (parts[index + 2] = part)
                   helper.wrap(
-                      <OnClickSpan key={`${index}${keySuffix}`} cursorOffset={helper.cursorOffset} onClick={context.onClick}>
+                      <OnClickSpan
+                          key={`${index * indexFactor}${parseTags.name}`}
+                          cursorOffset={helper.cursorOffset}
+                          onClick={context.onClick}
+                      >
                           {parts[index - 1]}
-                          <a
-                              href={context.getClientUrl(resolvePath(filterOutputPath, part))}
-                              target='_blank'
-                              rel='noreferrer'
-                              className={classNames(context.filterHighlightTags.has(part) ? 'link-warning' : 'link-tag', {
+                          <span
+                              className={classNames(context.filterHighlightTags.has(part) ? 'link-tag-match' : 'link-tag', {
                                   disabled: context.disabled,
                               })}
-                              onClick={focusNothing}
+                              onClick={(): void => onTagClick(part)}
                           >
                               {part}
-                          </a>
+                          </span>
                       </OnClickSpan>,
-                      parts[index - 2].length
-                  )
+                      parts[index - 2].length,
+                  ),
         );
     }
 }
 
 function parseKeywords(value: string, cursorOffset: number, context: LineContext): ReactNode {
-    const keySuffix = 'k';
     const helper = new Helper(cursorOffset);
     // Used 'TO[D]O' so it does not match real code To Dos.
     // '\u00C0-\u00FF' matches Latin-1 Supplement see https://jrgraphix.net/r/Unicode/00A0-00FF
     return value.split(/((^|\s|[^\p{L}\d])(NOTE|BEGIN|END|CAUTION|TO[D]O|WARNING)($|\s|[^\p{L}\d]))/u).map((part, index, parts) =>
         index % 5 === 0
             ? helper.wrap(
-                  <OnClickSpan key={`${index}${keySuffix}`} cursorOffset={helper.cursorOffset} onClick={context.onClick}>
+                  <OnClickSpan
+                      key={`${index * indexFactor}${parseKeywords.name}`}
+                      cursorOffset={helper.cursorOffset}
+                      onClick={context.onClick}
+                  >
                       {part}
                   </OnClickSpan>,
-                  part.length
+                  part.length,
               )
             : index % 5 === 3 &&
               // parts[index - 2] = parts[index - 1] parts[index] = part parts[index + 1]
               helper.wrap(
-                  <OnClickSpan key={`${index}${keySuffix}`} cursorOffset={helper.cursorOffset} onClick={context.onClick}>
+                  <OnClickSpan
+                      key={`${index * indexFactor}${parseKeywords.name}`}
+                      cursorOffset={helper.cursorOffset}
+                      onClick={context.onClick}
+                  >
                       {parts[index - 1]}
                       {parseKeywordsHelper(part)}
                       {parts[index + 1]}
                   </OnClickSpan>,
-                  parts[index - 2].length
-              )
+                  parts[index - 2].length,
+              ),
     );
 }
 
@@ -403,7 +419,7 @@ function OnClickDiv({
     readonly className?: string;
     readonly cursorOffset: number;
     readonly onClick: OnClick;
-}): JSX.Element {
+}): React.JSX.Element {
     return (
         <div className={classNames('d-inline-block', className)} onClick={useOnClickCallback(cursorOffset, onClick)}>
             {children}
@@ -421,7 +437,7 @@ function OnClickSpan({
     readonly className?: string;
     readonly cursorOffset: number;
     readonly onClick: OnClick;
-}): JSX.Element {
+}): React.JSX.Element {
     return (
         <span className={className} onClick={useOnClickCallback(cursorOffset, onClick)}>
             {children}
@@ -442,6 +458,8 @@ class Helper {
     }
 }
 
+const indexFactor = 1;
+
 /**
  * Taken from https://stackoverflow.com/questions/4811822/get-a-ranges-start-and-end-offsets-relative-to-its-parent-container/4812022#4812022
  */
@@ -450,9 +468,8 @@ function getSelectionCharacterOffsetWithin(element: EventTarget): {readonly star
     let end = 0;
     const doc = (element as any).ownerDocument || (element as any).document;
     const win = doc.defaultView || doc.parentWindow;
-    let sel;
     if (typeof win.getSelection != 'undefined') {
-        sel = win.getSelection();
+        const sel = win.getSelection();
         if (sel.rangeCount > 0) {
             const range = win.getSelection().getRangeAt(0);
             const preCaretRange = range.cloneRange();
@@ -462,14 +479,17 @@ function getSelectionCharacterOffsetWithin(element: EventTarget): {readonly star
             preCaretRange.setEnd(range.endContainer, range.endOffset);
             end = preCaretRange.toString().length;
         }
-    } else if ((sel = doc.selection) && sel.type != 'Control') {
-        const textRange = sel.createRange();
-        const preCaretTextRange = doc.body.createTextRange();
-        preCaretTextRange.moveToElementText(element);
-        preCaretTextRange.setEndPoint('EndToStart', textRange);
-        start = preCaretTextRange.text.length;
-        preCaretTextRange.setEndPoint('EndToEnd', textRange);
-        end = preCaretTextRange.text.length;
+    } else {
+        const sel = doc.selection;
+        if (sel && sel.type != 'Control') {
+            const textRange = sel.createRange();
+            const preCaretTextRange = doc.body.createTextRange();
+            preCaretTextRange.moveToElementText(element);
+            preCaretTextRange.setEndPoint('EndToStart', textRange);
+            start = preCaretTextRange.text.length;
+            preCaretTextRange.setEndPoint('EndToEnd', textRange);
+            end = preCaretTextRange.text.length;
+        }
     }
     return {start, end};
 }

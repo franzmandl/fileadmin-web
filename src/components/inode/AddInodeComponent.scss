@@ -1,0 +1,7 @@
+@import '../../scss/variables.scss';
+
+.add-inode-component {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    background-color: mix($success, $body-bg, 7%);
+}

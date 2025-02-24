@@ -9,7 +9,7 @@ export function useAsyncCallback<T, A extends ReadonlyArray<unknown>, R>(
     callback: (...args: A) => Promise<T> | T,
     onFulfilled: (value: T, ...args: A) => R,
     onRejected: (error: unknown, ...args: A) => R,
-    onFinally?: (...args: A) => void
+    onFinally?: (...args: A) => void,
 ): (...args: A) => Promise<R> {
     const callbackRef = useLatest(callback);
     const onFulfilledRef = useLatest(onFulfilled);
@@ -21,7 +21,7 @@ export function useAsyncCallback<T, A extends ReadonlyArray<unknown>, R>(
             return promise
                 .then(
                     (value) => onFulfilledRef.current(value, ...args),
-                    (error) => onRejectedRef.current(error, ...args)
+                    (error) => onRejectedRef.current(error, ...args),
                 )
                 .finally(() => onFinallyRef.current?.(...args));
         } else {

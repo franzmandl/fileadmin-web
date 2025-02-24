@@ -1,16 +1,13 @@
-import {useDepsEffect, useLatest} from 'common/ReactUtil';
-import {GalleryControl, SetGalleryControl} from 'components/gallery/GalleryControl';
+import {useLatest} from 'common/ReactUtil';
+import {GalleryControl, SetGalleryControl} from './GalleryControl';
 import {useMemo, useState} from 'react';
-import {AppStore} from './useAppStore';
+import {AppStore} from 'stores/useAppStore';
 
 export interface GalleryStore {
     readonly setGalleryControl: SetGalleryControl;
 }
 
-export function useGalleryStore(
-    appStore: AppStore,
-    isLoggedIn: boolean
-): {
+export function useGalleryStore(appStore: AppStore): {
     readonly galleryStore: GalleryStore;
     readonly galleryControl: GalleryControl | undefined;
 } {
@@ -21,19 +18,13 @@ export function useGalleryStore(
         appStore.appParameter.setGalleryIsOpen(nextGalleryControl !== undefined);
     });
 
-    useDepsEffect(() => {
-        if (!isLoggedIn) {
-            setGalleryControlAndParameterRef.current(undefined);
-        }
-    }, [isLoggedIn]);
-
     return {
         galleryStore: useMemo(
             () => ({
                 setGalleryControl: (nextGalleryControl: GalleryControl | undefined) =>
                     setGalleryControlAndParameterRef.current(nextGalleryControl),
             }),
-            [setGalleryControlAndParameterRef]
+            [setGalleryControlAndParameterRef],
         ),
         galleryControl,
     };

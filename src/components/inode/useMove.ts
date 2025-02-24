@@ -1,22 +1,25 @@
 import {useAsyncCallback} from 'common/useAsyncCallback';
 import {AppContext} from 'stores/AppContext';
-import {Inode} from 'model/Inode';
+import {Inode} from 'dto/Inode';
+import {resolvePath} from 'common/Util';
 
 export function useMove({
     context: {appStore, inodeStore, consoleStore},
-    inode,
+    newParentPath,
+    oldPath,
     onMove,
 }: {
     readonly context: AppContext;
-    readonly inode: Inode;
+    readonly newParentPath: string;
+    readonly oldPath: string;
     readonly onMove: (newInode: Inode) => void;
-}): (relativeDestination: string, onSuccess?: () => void) => Promise<void> {
+}): (newPath: string, onSuccess?: () => void) => Promise<void> {
     return useAsyncCallback(
-        (relativeDestination: string) => appStore.indicateLoading(appStore.preventClose(inodeStore.move(inode, relativeDestination))),
+        (newPath: string) => appStore.indicateLoading(appStore.preventClose(inodeStore.move(oldPath, resolvePath(newParentPath, newPath)))),
         (newInode, _, onSuccess?: () => void) => {
             onMove(newInode);
             onSuccess?.();
         },
-        consoleStore.handleError
+        consoleStore.handleError,
     );
 }

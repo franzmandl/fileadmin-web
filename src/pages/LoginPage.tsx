@@ -1,7 +1,7 @@
 import {AxiosStatic} from 'axios';
-import {serverPath, constant, LocalStorageKey} from 'common/constants';
+import {serverPath, constant} from 'common/constants';
 import {FormGroupCheckbox} from 'components/util/FormGroupCheckbox';
-import {useState} from 'react';
+import React, {useState} from 'react';
 import {Button, Card, CardBody, CardHeader, Col, Form, FormGroup, Input, Label} from 'reactstrap';
 import './LoginPage.scss';
 import {focusNothing} from 'common/ReactUtil';
@@ -14,10 +14,10 @@ export function LoginPage({
 }: {
     readonly axios: AxiosStatic;
     readonly context: AppContext;
-}): JSX.Element {
+}): React.JSX.Element {
     const [username, setUsername] = useState<string>(appStore.appParameter.values.username);
     const [password, setPassword] = useState<string>('');
-    const [rememberMe, setRememberMe] = useState<boolean>(localStorage.getItem(LocalStorageKey.rememberMe) === 'true');
+    const [rememberMe, setRememberMe] = useState<boolean>(appStore.appParameter.values.rememberMe);
 
     const login = useAsyncCallback(
         () => {
@@ -26,20 +26,17 @@ export function LoginPage({
             params.append('password', password);
             if (rememberMe) {
                 params.append('remember-me', '1');
-                localStorage.setItem(LocalStorageKey.rememberMe, 'true');
-            } else {
-                localStorage.removeItem(LocalStorageKey.rememberMe);
             }
             return appStore.indicateLoading(
                 appStore.preventClose(
                     axios.post(serverPath.login(), params, {
                         withCredentials: true,
-                    })
-                )
+                    }),
+                ),
             );
         },
         () => authenticationStore.setIsLoggedIn(true),
-        consoleStore.handleError
+        consoleStore.handleError,
     );
 
     return (

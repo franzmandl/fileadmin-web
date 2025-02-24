@@ -1,28 +1,30 @@
-import {separator} from 'common/Util';
+import {resolvePath, separator} from 'common/Util';
 import {SetKeyboardControl} from 'components/keyboard-control/KeyboardControl';
 import {AutoResizeTextarea} from 'components/textarea/AutoResizeTextarea';
-import {SuggestionControl} from 'components/textarea/RichTextarea';
-import {Dispatch, useState} from 'react';
+import React, {Dispatch, useState} from 'react';
 import {Button} from 'reactstrap';
 import './SearchComponent.scss';
+import {filterOperatorEvaluate, separatorWordRegex} from 'common/constants';
+import {SuggestionStore} from 'stores/useSuggestionStore';
 
 export function SearchComponent({
     setKeyboardControl,
     path,
     setPath,
     spellCheck,
-    suggestionControl,
+    suggestionStore,
 }: {
     readonly setKeyboardControl: SetKeyboardControl;
     readonly path: string;
     readonly setPath: Dispatch<string>;
     readonly spellCheck: boolean;
-    readonly suggestionControl: SuggestionControl;
-}): JSX.Element {
-    const [value, setValue] = useState<string>('#');
-    const search = (): void => {
-        setPath((path === separator ? '' : path) + value.replaceAll('#', separator));
-        setValue('#');
+    readonly suggestionStore: SuggestionStore;
+}): React.JSX.Element {
+    const suggestionControl = suggestionStore.createSuggestionControl(path, separatorWordRegex);
+    const [value, setValue] = useState<string>(separator);
+    const search = (appendix: string): void => {
+        setPath(resolvePath(path, value.replace(/^\/+|(?<=\/)\/+|\/+$/g, '') + appendix));
+        setValue(separator);
     };
     return (
         <div className='search-component'>
@@ -30,7 +32,7 @@ export function SearchComponent({
                 setKeyboardControl={setKeyboardControl}
                 onEnterKeyDown={(ev): void => {
                     ev.preventDefault();
-                    search();
+                    search('');
                 }}
                 spellCheck={spellCheck}
                 suggestionControl={suggestionControl}
@@ -38,9 +40,8 @@ export function SearchComponent({
                 value={value}
                 setValue={setValue}
             />
-            <Button className='m-1' color='dark' onClick={search}>
-                <span className='mdi mdi-magnify' />
-            </Button>
+            <Button className='m-1 mdi mdi-play' color='dark' onClick={(): void => search('/,max(/100/)/' + filterOperatorEvaluate)} />
+            <Button className='m-1 mdi mdi-tag' color='dark' onClick={(): void => search('')} />
         </div>
     );
 }

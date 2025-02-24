@@ -1,5 +1,5 @@
 import {ImmutableRefObject, useDepsEffect} from 'common/ReactUtil';
-import {useState, ReactNode, useRef} from 'react';
+import React, {useState, ReactNode, useRef} from 'react';
 
 /**
  * See https://github.com/NightCafeStudio/react-render-if-visible/blob/main/src/render-if-visible.tsx
@@ -18,7 +18,7 @@ export function RenderIfVisible({
     readonly root?: HTMLElement | null;
     readonly placeholder?: ReactNode;
     readonly children: ReactNode;
-}): JSX.Element {
+}): React.JSX.Element {
     const [isVisible, setIsVisible] = useState<boolean>(initialVisible);
     const [wasVisible, setWasVisible] = useState<boolean>(initialVisible);
     const setIsVisibleAndWasVisible = useRef((nextIsVisible: boolean) => {
@@ -40,7 +40,7 @@ export function RenderIfVisible({
                         setIsVisibleAndWasVisible.current(entries[0].isIntersecting);
                     }
                 },
-                {root}
+                {root},
             );
             observer.observe(element);
             return (): void => {

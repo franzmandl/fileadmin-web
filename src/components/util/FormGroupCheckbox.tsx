@@ -1,4 +1,4 @@
-import {Dispatch, ReactNode} from 'react';
+import React, {Dispatch, ReactNode} from 'react';
 import {FormGroup, Input} from 'reactstrap';
 
 export function FormGroupCheckbox({
@@ -11,7 +11,7 @@ export function FormGroupCheckbox({
     readonly children: ReactNode;
     readonly disabled?: boolean;
     readonly setChecked: Dispatch<boolean>;
-}): JSX.Element {
+}): React.JSX.Element {
     return (
         <label>
             <FormGroup check>

@@ -1,8 +1,7 @@
 import {getNextIndex, getPrevIndex} from 'common/HasLength';
 import {focusNothing, useDepsEffect} from 'common/ReactUtil';
-import {encodePath} from 'common/Util';
-import {getDownloadPath, Inode} from 'model/Inode';
-import {useRef, useState} from 'react';
+import {getDownloadPath, Inode} from 'dto/Inode';
+import React, {useRef, useState} from 'react';
 import {Button, ButtonGroup} from 'reactstrap';
 import {AppContext} from 'stores/AppContext';
 import './AudioPlayer.scss';
@@ -11,10 +10,12 @@ import {AudioPlayerControl} from './AudioPlayerControl';
 export function AudioPlayer({
     audioPlayerControl: {inodes},
     context: {appStore, audioPlayerStore},
+    isLoggedIn,
 }: {
     readonly audioPlayerControl: AudioPlayerControl;
     readonly context: AppContext;
-}): JSX.Element {
+    readonly isLoggedIn: boolean;
+}): React.JSX.Element {
     const ref = useRef<HTMLAudioElement>(null);
     const [currentIndex, setCurrentIndex] = useState<number>(0);
     const currentInode: Inode | undefined = inodes[currentIndex];
@@ -50,11 +51,16 @@ export function AudioPlayer({
             play();
         }
     };
+    useDepsEffect(() => {
+        if (!isLoggedIn) {
+            pause();
+        }
+    }, [isLoggedIn]);
     const shuffle = (): void => {
         alert('Not implemented yet.');
     };
     return (
-        <div className='audio-player'>
+        <div className='audio-player' hidden={!isLoggedIn}>
             <div className='audio-player-left'>
                 <Button
                     className={`m-1 mdi ${isPlaying ? 'mdi-pause' : 'mdi-play'}`}
@@ -100,7 +106,7 @@ export function AudioPlayer({
                     onEnded={onSongEnded}
                     onPlay={(): void => setIsPlaying(true)}
                     onPause={(): void => setIsPlaying(false)}
-                    src={getDownloadPath(currentInode, encodePath(currentInode.path))}
+                    src={getDownloadPath(currentInode)}
                 />
             </div>
             <div className='audio-player-right'>

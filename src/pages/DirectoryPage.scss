@@ -1,0 +1,38 @@
+@import '../scss/variables.scss';
+
+@media (min-width: $mobile-breakpoint) {
+    .hoverable:hover {
+        cursor: pointer;
+        background-color: mix($secondary, $body-bg, 20%);
+    }
+    .action-view .hoverable:hover {
+        background-color: mix($primary, $body-bg, 25%);
+    }
+    .action-edit .hoverable:hover {
+        background-color: mix($warning, $body-bg, 11%);
+    }
+    .action-add .hoverable:hover {
+        background-color: mix($success, $body-bg, 23%);
+    }
+    .action-delete .hoverable:hover {
+        background-color: mix($danger, $body-bg, 15%);
+    }
+}
+
+.directory-page-parent {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+
+    .directory-page-parent-anchor {
+        grid-column: 1 / 4;
+        grid-row: 1;
+    }
+    .directory-page-parent-size {
+        grid-column: 2;
+        grid-row: 1;
+    }
+    .directory-page-parent-dropdown {
+        grid-column: 3;
+        grid-row: 1;
+    }
+}

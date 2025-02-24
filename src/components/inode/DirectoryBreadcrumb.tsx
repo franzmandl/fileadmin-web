@@ -1,7 +1,7 @@
 import classNames from 'classnames';
 import {focusNothing, stopPropagation, useDepsEffect} from 'common/ReactUtil';
 import {separator, paramsToHash} from 'common/Util';
-import {Fragment, useRef} from 'react';
+import React, {Fragment, useRef} from 'react';
 
 const anchorClassName = 'd-inline-block text-decoration-none px-1 py-2';
 
@@ -15,7 +15,7 @@ export function DirectoryBreadcrumb({
     readonly getEncodedPath: (path: string) => URLSearchParams;
     readonly onClick: (ev: React.MouseEvent) => void;
     readonly path: string;
-}): JSX.Element {
+}): React.JSX.Element {
     const wrapperRef = useRef<HTMLDivElement>(null);
     useDepsEffect(() => {
         wrapperRef.current?.scrollTo(20000, 0);

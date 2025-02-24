@@ -30,14 +30,15 @@
     "prettier/prettier": ["warn"],
     "@typescript-eslint/explicit-function-return-type": ["error"],
     "@typescript-eslint/no-explicit-any": ["off"],
+    "@typescript-eslint/restrict-plus-operands": ["error"],
+    "@typescript-eslint/restrict-template-expressions": ["error"],
+    "no-constant-condition": ["off"],
     "no-param-reassign": ["error"],
     "no-restricted-imports": [
       "error",
       {
         "patterns": ["../.*"]
       }
-    ],
-    "@typescript-eslint/restrict-plus-operands": ["error"],
-    "@typescript-eslint/restrict-template-expressions": ["error"]
+    ]
   }
 }

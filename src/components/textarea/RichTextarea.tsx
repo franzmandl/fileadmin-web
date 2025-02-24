@@ -1,11 +1,22 @@
 import classNames from 'classnames';
-import {constant} from 'common/constants';
+import {WordRegex, constant} from 'common/constants';
 import {useDepsEffect, useDepsLayoutEffect} from 'common/ReactUtil';
 import {alwaysThrow, getIndent, ifMinusOne, newLine} from 'common/Util';
-import {Dispatch, ForwardedRef, forwardRef, KeyboardEventHandler, MouseEventHandler, MutableRefObject, useState} from 'react';
+import React, {
+    Dispatch,
+    ForwardedRef,
+    forwardRef,
+    KeyboardEventHandler,
+    MouseEventHandler,
+    MutableRefObject,
+    useImperativeHandle,
+    useRef,
+    useState,
+} from 'react';
 import {KeyboardControl, SetKeyboardControl} from 'components/keyboard-control/KeyboardControl';
 import './RichTextarea.scss';
 import {useAsyncCallback} from 'common/useAsyncCallback';
+import {getWord} from 'stores/useSuggestionStore';
 
 export interface OnSuggestionReturnType {
     readonly nextSelectionStartAndEnd: number;
@@ -13,9 +24,10 @@ export interface OnSuggestionReturnType {
 }
 
 export interface SuggestionControl {
-    readonly getSuggestions: (textarea: HTMLTextAreaElement) => Promise<ReadonlyArray<string>>;
+    readonly getSuggestions: (word: string | undefined) => Promise<ReadonlyArray<string>>;
     readonly onError: (error: unknown) => void;
     readonly onSuggestion: (textarea: HTMLTextAreaElement, suggestion: string) => OnSuggestionReturnType;
+    readonly wordRegex: WordRegex;
 }
 
 export const RichTextarea = forwardRef(function RichTextarea(
@@ -48,8 +60,10 @@ export const RichTextarea = forwardRef(function RichTextarea(
         readonly value: string;
         readonly setValue: Dispatch<string>;
     },
-    textareaRef: ForwardedRef<HTMLTextAreaElement>
-): JSX.Element {
+    forwardedRef: ForwardedRef<HTMLTextAreaElement>,
+): React.JSX.Element {
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    useImperativeHandle(forwardedRef, () => textareaRef.current as HTMLTextAreaElement, []);
     const [suggestions, setSuggestions] = useState<ReadonlyArray<string>>([]);
     /**
      * Originally this function used react-dom's flushSync.
@@ -72,7 +86,7 @@ export const RichTextarea = forwardRef(function RichTextarea(
                 textarea,
                 value.substring(0, selectionStart) + newLine + indent + value.substring(selectionEnd),
                 nextSelectionStartAndEnd,
-                nextSelectionStartAndEnd
+                nextSelectionStartAndEnd,
             );
         }
     };
@@ -96,7 +110,7 @@ export const RichTextarea = forwardRef(function RichTextarea(
                 textarea,
                 value.substring(0, selectionStart) + constant.indent + value.substring(selectionEnd),
                 nextSelectionStartAndEnd,
-                nextSelectionStartAndEnd
+                nextSelectionStartAndEnd,
             );
         } else {
             const linesStart = value.lastIndexOf(newLine, selectionStart - 1) + 1;
@@ -115,14 +129,14 @@ export const RichTextarea = forwardRef(function RichTextarea(
                     textarea,
                     value.substring(0, linesStart) + lines.map(replaceLine).join(newLine) + value.substring(linesEnd),
                     Math.max(linesStart, selectionStart - replacedCharacterInFirstLineCount),
-                    selectionEnd - replacedCharacterCount
+                    selectionEnd - replacedCharacterCount,
                 );
             } else {
                 flushValue(
                     textarea,
                     value.substring(0, linesStart) + constant.indent + lines.join(newLine + constant.indent) + value.substring(linesEnd),
                     selectionStart + constant.indent.length,
-                    selectionEnd + constant.indent.length * lines.length
+                    selectionEnd + constant.indent.length * lines.length,
                 );
             }
         }
@@ -143,15 +157,21 @@ export const RichTextarea = forwardRef(function RichTextarea(
                 setKeyboardControl?.(undefined);
             }
         },
-        []
+        [],
     );
+    const [word, setWord] = useState<string>();
     const onChange = useAsyncCallback<ReadonlyArray<string>, [React.ChangeEvent<HTMLTextAreaElement>], void>(
         (ev: React.ChangeEvent<HTMLTextAreaElement>) => {
             setValue(ev.target.value);
-            return suggestionControl?.getSuggestions(ev.currentTarget) ?? [];
+            if (suggestionControl !== undefined) {
+                const nextWord = getWord(ev.currentTarget, suggestionControl.wordRegex);
+                setWord(nextWord);
+                return suggestionControl.getSuggestions(nextWord) ?? [];
+            }
+            return [];
         },
         setSuggestions,
-        suggestionControl?.onError ?? alwaysThrow
+        suggestionControl?.onError ?? alwaysThrow,
     );
     return (
         <div className={classNames('rich-textarea', className)}>
@@ -191,8 +211,13 @@ export const RichTextarea = forwardRef(function RichTextarea(
                 }}
             />
             <div className='rich-textarea-suggestions' hidden={suggestions.length === 0}>
-                {suggestions.map((suggestion, index) => (
-                    <Suggestion key={index} onSuggestion={onSuggestion} suggestion={suggestion} />
+                {suggestions.map((suggestion) => (
+                    <Suggestion
+                        key={suggestion}
+                        className={suggestion === word ? 'bg-primary text-white' : ''}
+                        onSuggestion={onSuggestion}
+                        suggestion={suggestion}
+                    />
                 ))}
             </div>
         </div>
@@ -200,14 +225,17 @@ export const RichTextarea = forwardRef(function RichTextarea(
 });
 
 function Suggestion({
+    className,
     onSuggestion,
     suggestion,
 }: {
+    readonly className?: string;
     readonly onSuggestion: (suggestion: string) => void;
     readonly suggestion: string;
-}): JSX.Element {
+}): React.JSX.Element {
     return (
         <div
+            className={className}
             onPointerDown={(ev): void => {
                 ev.preventDefault();
                 onSuggestion(suggestion);
@@ -227,7 +255,7 @@ function createKeyboardControl(textarea: HTMLTextAreaElement): KeyboardControl {
             const {selectionDirection, selectionStart, selectionEnd} = textarea;
             const nextSelectionStartAndEnd = Math.max(
                 0,
-                (selectionDirection === 'backward' ? selectionStart : selectionEnd) + relativePosition
+                (selectionDirection === 'backward' ? selectionStart : selectionEnd) + relativePosition,
             );
             textarea.setSelectionRange(nextSelectionStartAndEnd, nextSelectionStartAndEnd);
         },

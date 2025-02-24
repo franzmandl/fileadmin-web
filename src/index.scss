@@ -20,6 +20,11 @@ body > #root {
     display: none !important;
 }
 
+// Fix overflowing titles.
+.modal-title {
+    overflow-x: auto;
+}
+
 pre {
     margin: 0;
 }

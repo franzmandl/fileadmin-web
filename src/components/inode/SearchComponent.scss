@@ -2,6 +2,6 @@
 
 .search-component {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr auto auto;
     background-color: $input-bg;
 }

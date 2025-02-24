@@ -1,5 +1,15 @@
-import {BaseSyntheticEvent, DependencyList, Dispatch, EffectCallback, MutableRefObject, useEffect, useLayoutEffect, useRef} from 'react';
-import {removeMatches} from './Util';
+import {
+    BaseSyntheticEvent,
+    DependencyList,
+    Dispatch,
+    EffectCallback,
+    MutableRefObject,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+} from 'react';
+import {arrayAddInPlace, arrayRemoveInPlace, arrayReplaceInPlace, removeMatches} from './Util';
 
 export function stopPropagation(ev: BaseSyntheticEvent): void {
     ev.stopPropagation();
@@ -16,27 +26,22 @@ export function stopPropagationAndFocusNothing(ev: BaseSyntheticEvent): void {
 }
 
 export function arrayAdd<T>(array: ReadonlyArray<T>, index: number, value: T): T[] {
-    const result = [...array];
-    result.splice(index, 0, value);
-    return result;
+    return arrayAddInPlace([...array], index, value);
 }
 
 export function arrayRemove<T>(array: ReadonlyArray<T>, index: number): T[] {
-    const result = [...array];
-    result.splice(index, 1);
-    return result;
+    return arrayRemoveInPlace([...array], index);
 }
 
 export function arrayReplace<T>(array: ReadonlyArray<T>, index: number, value: T): T[] {
-    const result = [...array];
-    result.splice(index, 1, value);
-    return result;
+    return arrayReplaceInPlace([...array], index, value);
 }
 
 export type ImmutableRefObject<T> = Readonly<MutableRefObject<T>>;
 
 export const useDepsLayoutEffect: (effect: EffectCallback, deps: DependencyList) => void = useLayoutEffect;
 export const useDepsEffect: (effect: EffectCallback, deps: DependencyList) => void = useEffect;
+export const useDepsMemo = useMemo;
 
 export function useConditionalEffect(condition: boolean, effect: EffectCallback): void {
     useDepsEffect(() => {

@@ -1,7 +1,7 @@
-import {AudioPlayerControl, createAudioPlayerControl, SetAudioPlayerControl} from 'components/audio-player/AudioPlayerControl';
-import {Inode} from 'model/Inode';
+import {AudioPlayerControl, SetAudioPlayerControl} from './AudioPlayerControl';
+import {Inode} from 'dto/Inode';
 import {useMemo, useState} from 'react';
-import {AppStore} from './useAppStore';
+import {AppStore} from 'stores/useAppStore';
 
 export interface AudioPlayerStore {
     readonly enqueue: (inode: Inode) => void;
@@ -22,12 +22,18 @@ export function useAudioPlayerStore(appStore: AppStore): {
                         if (prev !== undefined) {
                             appStore.toast(<>Added to queue.</>);
                         }
-                        return createAudioPlayerControl(prev, inode);
+                        return enqueue(prev, inode);
                     });
                 },
                 setAudioPlayerControl,
             }),
-            [appStore]
+            [appStore],
         ),
+    };
+}
+
+function enqueue(prev: AudioPlayerControl | undefined, inode: Inode): AudioPlayerControl {
+    return {
+        inodes: [...(prev?.inodes ?? []), inode],
     };
 }

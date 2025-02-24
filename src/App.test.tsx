@@ -7,7 +7,7 @@ describe('<App/>', () => {
             ''
                 .split('\n')
                 .map((value) => value + '\n')
-                .join('')
+                .join(''),
         ).toEqual('\n');
     });
 

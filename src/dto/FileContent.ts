@@ -1,4 +1,4 @@
 export interface FileContent {
-    readonly lastModified: number | null;
+    readonly lastModifiedMilliseconds?: number;
     readonly value: string;
 }

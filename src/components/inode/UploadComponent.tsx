@@ -1,8 +1,8 @@
 import classNames from 'classnames';
 import {useDepsEffect} from 'common/ReactUtil';
 import {useAsyncCallback} from 'common/useAsyncCallback';
-import {Inode} from 'model/Inode';
-import {Dispatch, useState} from 'react';
+import {Inode} from 'dto/Inode';
+import React, {Dispatch, useState} from 'react';
 import {AppContext} from 'stores/AppContext';
 
 export function UploadComponent({
@@ -11,21 +11,22 @@ export function UploadComponent({
     context: {appStore, consoleStore, inodeStore},
     inode,
     setInode,
-    setShowDropdown,
+    setShowDropdownFalse,
 }: {
     readonly accept?: string;
     readonly className?: string;
     readonly context: AppContext;
     readonly inode: Inode;
     readonly setInode: Dispatch<Inode>;
-    readonly setShowDropdown: Dispatch<boolean>;
-}): JSX.Element {
+    readonly setShowDropdownFalse: () => void;
+}): React.JSX.Element {
     const [selectedFile, setSelectedFile] = useState<File>();
     const upload = useAsyncCallback(
-        (file: File) => appStore.indicateLoading(appStore.preventClose(inodeStore.postFile(inode.path, inode.lastModified, file))),
+        (file: File) =>
+            appStore.indicateLoading(appStore.preventClose(inodeStore.postFile(inode.path, inode.lastModifiedMilliseconds, file, inode))),
         setInode,
         consoleStore.handleError,
-        () => setShowDropdown(false)
+        setShowDropdownFalse,
     );
     useDepsEffect(() => {
         if (selectedFile != undefined) {

@@ -1,4 +1,4 @@
-import {Dispatch, ReactNode} from 'react';
+import React, {Dispatch, ReactNode} from 'react';
 import {DropdownItem, FormGroup, Input} from 'reactstrap';
 import './DropdownItemCheckbox.scss';
 
@@ -14,7 +14,7 @@ export function DropdownItemCheckbox({
     readonly disabled?: boolean;
     readonly setChecked: Dispatch<boolean>;
     readonly hidden?: boolean;
-}): JSX.Element {
+}): React.JSX.Element {
     return (
         <DropdownItem className='dropdown-item-checkbox' hidden={hidden} tag='label' toggle={false}>
             <FormGroup check className='m-0'>

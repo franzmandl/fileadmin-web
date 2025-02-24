@@ -5,7 +5,7 @@ import {useAsyncCallback} from 'common/useAsyncCallback';
 import {Dispatch, ReactNode, useMemo, useState} from 'react';
 import {DropdownItem} from 'reactstrap';
 import {AppStore} from './useAppStore';
-import {ConsoleStore} from './useConsoleStore';
+import {ConsoleStore} from 'components/console/useConsoleStore';
 
 export interface AuthenticationStore {
     readonly logoutDropdownItem: ReactNode;
@@ -16,7 +16,7 @@ export interface AuthenticationStore {
 export function useAuthenticationStore(
     axios: AxiosStatic,
     appStore: AppStore,
-    consoleStore: ConsoleStore
+    consoleStore: ConsoleStore,
 ): {
     readonly authenticationStore: AuthenticationStore;
     readonly isLoggedIn: boolean;
@@ -29,12 +29,12 @@ export function useAuthenticationStore(
                     appStore.preventClose(
                         axios.get(serverPath.authenticatedPath.logout(), {
                             withCredentials: true,
-                        })
-                    )
+                        }),
+                    ),
                 ),
             () => setIsLoggedIn(false),
-            consoleStore.handleError
-        )
+            consoleStore.handleError,
+        ),
     );
     return {
         authenticationStore: useMemo(
@@ -55,7 +55,7 @@ export function useAuthenticationStore(
                 },
                 setIsLoggedIn,
             }),
-            [consoleStore, logoutRef]
+            [consoleStore, logoutRef],
         ),
         isLoggedIn,
     };

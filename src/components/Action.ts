@@ -1,9 +1,11 @@
 export enum Action {
     view = 'view',
     edit = 'edit',
+    add = 'add',
+    cut = 'cut',
+    paste = 'paste',
     reload = 'reload',
     delete = 'delete',
-    add = 'add',
 }
 
 const actions: ReadonlyArray<string> = Object.values(Action);
@@ -15,8 +17,10 @@ export function parseAction(value: string | null): Action | null {
 export const keyToAction = Object.freeze<Record<string, Action | undefined>>({
     v: Action.view,
     e: Action.edit,
-    r: Action.reload,
     a: Action.add,
+    c: Action.cut,
+    p: Action.paste,
+    r: Action.reload,
     d: Action.delete,
     Delete: Action.delete,
     Escape: Action.view,

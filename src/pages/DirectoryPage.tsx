@@ -2,9 +2,9 @@ import {useLatest, useDepsEffect, stopPropagationAndFocusNothing, focusNothing} 
 import {encodePath, getName, getParentPath, separator, paramsToHash} from 'common/Util';
 import {Action, keyToAction} from 'components/Action';
 import {DirectoryComponent} from 'components/inode/DirectoryComponent';
-import {ComparatorDropdown} from 'components/inode/ComparatorDropdown';
-import React, {memo, useMemo, useRef, useState} from 'react';
-import {Button, DropdownItem, Input} from 'reactstrap';
+import {CompareParameterDropdown} from 'components/inode/CompareParameterDropdown';
+import React, {memo, useRef, useState} from 'react';
+import {Badge, Button, DropdownItem, Input, InputGroup} from 'reactstrap';
 import useResizeObserver from '@react-hook/resize-observer';
 import {MenuDropdown} from 'components/dropdown/MenuDropdown';
 import {AppContext} from 'stores/AppContext';
@@ -12,13 +12,17 @@ import {KeyboardControl} from 'components/keyboard-control/KeyboardControl';
 import {KeyboardControlComponent} from 'components/keyboard-control/KeyboardControlComponent';
 import {DirectoryPageContext} from './DirectoryPageContext';
 import {DropdownItemCheckbox} from 'components/dropdown/DropdownItemCheckbox';
-import {emptyInode, Inode} from 'model/Inode';
+import {emptyInode, Inode} from 'dto/Inode';
 import {SearchComponent} from 'components/inode/SearchComponent';
 import {useDirectoryPageParameter} from './useDirectoryPageParameter';
-import {Comparator} from 'common/Comparator';
+import {TagModal, TagModalControl} from 'components/filter/TagModal';
+import {hashWordRegex} from 'common/constants';
+import {ActionDropdown} from 'components/inode/ActionDropdown';
+import {InodeDropdown} from 'components/inode/InodeDropdown';
+import './DirectoryPage.scss';
 
 let linkElement: HTMLLinkElement | null = null;
-const umlauts = Object.freeze<Record<string, string>>({
+const umlauts = Object.freeze<Record<string, string | undefined>>({
     ä: 'a',
     ö: 'o',
     ü: 'u',
@@ -30,62 +34,57 @@ export function DirectoryPage({
 }: {
     readonly context: AppContext;
     readonly keyboardControl: KeyboardControl | undefined;
-}): JSX.Element {
+}): React.JSX.Element {
     const {appStore, authenticationStore, consoleStore, suggestionStore} = context;
-    const directoryPageParameter = useDirectoryPageParameter(
-        appStore.appParameter.encoded,
-        appStore.currentParams,
-        appStore.setCurrentParams
-    );
     const {
         previousPath,
+        values: {path, spellCheck},
+    } = appStore.appParameter;
+    const directoryPageParameter = useDirectoryPageParameter(appStore);
+    const {
         values: {
             action,
+            compareParameter,
             decentDirectory,
             decentFile,
             decentReadmeFile,
             decentRunLastFile,
-            path,
+            pageSize,
+            showDateFrom,
+            showDateTo,
             showHidden,
             showLastModified,
             showMimeType,
             showNotRepeating,
             showSize,
             showThumbnail,
-            showUnavailable,
             showWaiting,
-            sortAlphabetical,
-            sortAscending,
-            sortFoldersFirst,
-            sortPriority,
-            sortSpecialFirst,
-            today,
         },
         setAction,
         setDecentDirectory,
         setDecentFile,
         setDecentReadmeFile,
         setDecentRunLastFile,
+        setPageSize,
+        setShowDateFrom,
+        setShowDateTo,
         setShowHidden,
         setShowLastModified,
         setShowMimeType,
         setShowNotRepeating,
         setShowSize,
         setShowThumbnail,
-        setShowUnavailable,
         setShowWaiting,
-        setSortAlphabeticalAndAscending,
+        setSortAttributeAndAscending,
         setSortFoldersFirst,
         setSortPriority,
         setSortSpecialFirst,
-        setToday,
+        setSortTime,
+        setSortTrim,
     } = directoryPageParameter;
-    const comparator = useMemo(
-        () => new Comparator(sortAlphabetical, sortAscending, sortFoldersFirst, sortPriority, sortSpecialFirst),
-        [sortAlphabetical, sortAscending, sortFoldersFirst, sortPriority, sortSpecialFirst]
-    );
     const [canSearch, setCanSearch] = useState<boolean>(false);
     const [inode, setInode] = useState<Inode>(emptyInode);
+    const [size, setSize] = useState<number>();
     const actionChangeListeners = useRef<Set<(nextAction: Action, prevAction: Action) => void>>(new Set());
 
     useDepsEffect(() => {
@@ -154,7 +153,7 @@ export function DirectoryPage({
     };
 
     const onKeyDownRef = useLatest((ev: KeyboardEvent): boolean => {
-        if (ev.target === document.body) {
+        if (ev.target === document.body && !ev.ctrlKey) {
             const nextAction = keyToAction[ev.key];
             if (nextAction !== undefined) {
                 onActionChange(nextAction);
@@ -173,8 +172,11 @@ export function DirectoryPage({
         return () => appStore.keyDownListeners.remove(listener);
     }, [appStore.keyDownListeners]);
 
-    const suggestionControl = suggestionStore.createSuggestionControl(path);
+    const suggestionControl = suggestionStore.createSuggestionControl(path, hashWordRegex);
 
+    const [tagModalControl, setTagModalControl] = useState<TagModalControl>();
+
+    const dropdownContainerRef = watchHeightRef;
     const pageContext: DirectoryPageContext = {
         actionChangeListeners: {
             add: (listener: (nextAction: Action, prevAction: Action) => void): void => void actionChangeListeners.current.add(listener),
@@ -182,9 +184,9 @@ export function DirectoryPage({
                 void actionChangeListeners.current.delete(listener),
         },
         appContext: context,
-        comparator,
         directoryPageParameter,
-        dropdownContainerRef: watchHeightRef,
+        dropdownContainerRef,
+        setTagModalControl,
     };
 
     return (
@@ -196,35 +198,49 @@ export function DirectoryPage({
                         // position-relative for dropdown container
                         className='position-relative'
                     >
-                        <div hidden={!(path.length > 1)}>
+                        <div className='directory-page-parent'>
                             <a
-                                href={paramsToHash(directoryPageParameter.getEncodedPath(getParentPath(path)))}
-                                className='d-block hoverable p-2 reboot text-center'
+                                hidden={!(path.length > 1)}
+                                href={paramsToHash(appStore.appParameter.getEncodedPath(getParentPath(path)))}
+                                className='directory-page-parent-anchor d-block hoverable p-2 reboot text-center'
                                 onClick={stopPropagationAndFocusNothing}
                             >
                                 <span className='mdi mdi-subdirectory-arrow-right mdi-rotate-270' />
                             </a>
-                            <hr className='m-0' />
+                            <div className='directory-page-parent-size'>
+                                <Badge hidden={!(showSize && size !== undefined)} className='m-1' pill>
+                                    {size}
+                                </Badge>
+                            </div>
+                            <InodeDropdown
+                                className='directory-page-parent-dropdown m-1'
+                                container={dropdownContainerRef}
+                                context={context}
+                                createHref={(path: string): string => paramsToHash(appStore.appParameter.getEncodedPath(path))}
+                                inode={inode}
+                            />
                         </div>
+                        <hr className='m-0' />
                         {canSearch && (
                             <SearchComponent
-                                setPath={directoryPageParameter.pushPath}
+                                setPath={appStore.appParameter.pushPath}
                                 setKeyboardControl={appStore.setKeyboardControl}
                                 path={path}
-                                spellCheck={appStore.appParameter.values.spellCheck}
-                                suggestionControl={suggestionControl}
+                                spellCheck={spellCheck}
+                                suggestionStore={suggestionStore}
                             />
                         )}
                         <DirectoryComponent
                             setCanSearch={setCanSearch}
                             context={pageContext}
                             decentDirectory={decentDirectory}
-                            filterHighlightTags={inode.filterHighlightTagSet}
+                            filterHighlightTags={inode.item?.result?.highlightTagSet}
                             inode={inode}
-                            isFirstLevel={true}
                             setInode={setInode}
+                            isFirstLevel={true}
                             setIsReady={setIsReady}
-                            onMove={(inode): void => directoryPageParameter.replacePath(inode.path)}
+                            onDirectoryChange={(directory): void => setSize(directory?.children.length)}
+                            onMove={(inode): void => appStore.appParameter.replacePath(inode.path)}
                             path={path}
                             suggestionControl={suggestionControl}
                         />
@@ -256,20 +272,13 @@ export function DirectoryPage({
                     <Button
                         className='page-sidebar-icon'
                         outline
-                        active={action === Action.reload}
-                        onClick={(): void => onActionChange(Action.reload)}
-                    >
-                        <span className='mdi mdi-refresh' />
-                    </Button>
-                    <Button
-                        className='page-sidebar-icon'
-                        outline
                         color='success'
                         active={action === Action.add}
                         onClick={(): void => onActionChange(Action.add)}
                     >
                         <span className='mdi mdi-plus' />
                     </Button>
+                    <ActionDropdown action={action} className='page-sidebar-icon' onActionChange={onActionChange} />
                     <Button
                         className='page-sidebar-icon'
                         outline
@@ -294,27 +303,62 @@ export function DirectoryPage({
                         <span className='mdi mdi-arrow-collapse-up' />
                     </Button>
                     <KeyboardControlComponent hidden={keyboardControl === undefined} keyboardControl={keyboardControl} />
-                    <ComparatorDropdown
+                    <CompareParameterDropdown
                         className='page-sidebar-icon'
-                        comparator={comparator}
+                        compareParameter={compareParameter}
                         hidden={keyboardControl !== undefined}
-                        setSortAlphabeticalAndAscending={setSortAlphabeticalAndAscending}
-                        setSortFoldersFirst={setSortFoldersFirst}
-                        setSortPriority={setSortPriority}
-                        setSortSpecialFirst={setSortSpecialFirst}
-                    />
+                        setAttributeAndAscending={setSortAttributeAndAscending}
+                        setFoldersFirst={setSortFoldersFirst}
+                        setPriority={setSortPriority}
+                        setSpecialFirst={setSortSpecialFirst}
+                        setTime={setSortTime}
+                        setTrim={setSortTrim}
+                    >
+                        <DropdownItem text toggle={false}>
+                            <InputGroup size='sm'>
+                                <Input
+                                    invalid={pageSize.string !== '' && pageSize.value === null}
+                                    placeholder='Page Size'
+                                    style={{width: '7rem'}}
+                                    value={pageSize.string}
+                                    onChange={(ev): void => setPageSize(ev.target.value)}
+                                />
+                            </InputGroup>
+                        </DropdownItem>
+                    </CompareParameterDropdown>
                     <MenuDropdown className='page-sidebar-icon' hidden={keyboardControl !== undefined}>
-                        <DropdownItemCheckbox checked={showUnavailable} setChecked={setShowUnavailable}>
-                            Unavailable
-                        </DropdownItemCheckbox>
-                        <DropdownItem hidden={showUnavailable} text toggle={false}>
-                            <Input
-                                bsSize='sm'
-                                placeholder='Today'
-                                style={{width: '7.7rem'}}
-                                value={today}
-                                onChange={(ev): void => setToday(ev.target.value)}
-                            />
+                        {appStore.nowDropdownItem}
+                        <DropdownItem text toggle={false}>
+                            <InputGroup size='sm'>
+                                <Input
+                                    bsSize='sm'
+                                    invalid={showDateFrom.string !== '' && showDateFrom.date === null}
+                                    placeholder='From'
+                                    style={{width: '7rem'}}
+                                    value={showDateFrom.string}
+                                    onChange={(ev): void => setShowDateFrom(ev.target.value)}
+                                />
+                                <Button
+                                    className='mdi mdi-close'
+                                    disabled={showDateFrom.string === ''}
+                                    onClick={(): void => setShowDateFrom('')}
+                                />
+                            </InputGroup>
+                        </DropdownItem>
+                        <DropdownItem text toggle={false}>
+                            <InputGroup size='sm'>
+                                <Input
+                                    invalid={showDateTo.string !== '' && showDateTo.date === null}
+                                    placeholder='To'
+                                    style={{width: '7rem'}}
+                                    value={showDateTo.string}
+                                    onChange={(ev): void => setShowDateTo(ev.target.value)}
+                                />
+                                <Button
+                                    className={'mdi ' + (showDateTo.string === '' ? 'mdi-calendar-today' : 'mdi-close')}
+                                    onClick={(): void => setShowDateTo(showDateTo.string === '' ? '0d' : '')}
+                                />
+                            </InputGroup>
                         </DropdownItem>
                         <DropdownItemCheckbox checked={showHidden} setChecked={setShowHidden}>
                             Hidden
@@ -322,7 +366,7 @@ export function DirectoryPage({
                         <DropdownItemCheckbox checked={showNotRepeating} setChecked={setShowNotRepeating}>
                             Not Repeating
                         </DropdownItemCheckbox>
-                        <DropdownItemCheckbox hidden={showUnavailable} checked={showWaiting} setChecked={setShowWaiting}>
+                        <DropdownItemCheckbox checked={showWaiting} setChecked={setShowWaiting}>
                             Waiting
                         </DropdownItemCheckbox>
                         <DropdownItem divider />
@@ -358,6 +402,7 @@ export function DirectoryPage({
                     </MenuDropdown>
                 </div>
             </div>
+            <TagModal context={pageContext} control={tagModalControl} toggle={(): void => setTagModalControl(undefined)} />
         </div>
     );
 }
